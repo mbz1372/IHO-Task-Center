@@ -1,0 +1,8 @@
+import {hotels} from './hotels';import type {Task} from './types';
+const now=new Date();const d=(n:number)=>new Date(now.getTime()+n*86400000).toISOString().slice(0,10);
+export const seedTasks:Task[]=[
+{id:'T-1001',title:'دریافت ظرفیت آخر هفته',hotelId:2,hotelName:String(hotels[1].name),city:String(hotels[1].city),category:'ظرفیت',priority:'فوری',status:'جدید',assignee:'فاطمه رنجبر',manager:'نرگس قدرتی',dueDate:d(0),description:'ظرفیت پنجشنبه و جمعه دریافت و در پنل ثبت شود.',comments:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
+{id:'T-1002',title:'پیگیری قرارداد جدید',hotelId:3,hotelName:String(hotels[2].name),city:String(hotels[2].city),category:'قرارداد',priority:'بالا',status:'در حال پیگیری',assignee:'فائزه سالاری',manager:'محمد باقری',dueDate:d(2),description:'نسخه مهرشده قرارداد دریافت شود.',comments:[{user:'محمد باقری',text:'امروز پیگیری شود.',at:new Date().toISOString()}],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
+{id:'T-1003',title:'اصلاح عکس و امکانات',hotelId:4,hotelName:String(hotels[3].name),city:String(hotels[3].city),category:'محتوا',priority:'متوسط',status:'منتظر پاسخ هتل',assignee:'مهسا ناصری',manager:'منصوره یکتایی',dueDate:d(4),description:'عکس‌های جدید و امکانات اتاق‌ها دریافت شود.',comments:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
+{id:'T-1004',title:'بررسی اختلاف قیمت رقبا',hotelId:5,hotelName:String(hotels[4].name),city:String(hotels[4].city),category:'قیمت',priority:'بالا',status:'نیازمند اصلاح',assignee:'پگاه واعظین',manager:'سپیده دعوت‌طلب',dueDate:d(-1),description:'قیمت سایت‌های رقیب چک و اصلاحیه اعلام شود.',comments:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}
+];
