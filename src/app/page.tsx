@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useEffect, useMemo, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { Activity, AlarmClock, Archive, Bell, Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Download, Edit3, Eye, FileText, Flag, FolderKanban, Hotel, KeyRound, LayoutDashboard, ListChecks, LogOut, Moon, MoreHorizontal, Palette, Pin, Plus, RefreshCw, Rocket, Save, Search, Settings, Shield, Sparkles, Sun, Tag, Target, Trash2, Upload, UserPlus, Users, Wifi, WifiOff, X } from 'lucide-react';
 
-declare global { interface Window { XLSX?: any; supabase?: any; } }
+declare global { interface Window { __IHOS_ERROR__?: any; } }
 
 let sbClient:any = null;
 async function getSupabaseClient(){
@@ -11,30 +12,25 @@ async function getSupabaseClient(){
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if(!url || !key || typeof window === 'undefined') return null;
   if(sbClient) return sbClient;
-  if(!window.supabase){
-    await new Promise<void>((resolve,reject)=>{
-      const s=document.createElement('script');
-      s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-      s.async=true;
-      s.onload=()=>resolve();
-      s.onerror=()=>reject(new Error('Supabase Client بارگذاری نشد'));
-      document.head.appendChild(s);
+  try {
+    sbClient = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { 'x-client-info': 'iran-hotel-os-web' } }
     });
+    return sbClient;
+  } catch (e) {
+    console.error('Supabase client init failed', e);
+    return null;
   }
-  sbClient = window.supabase.createClient(url,key);
-  return sbClient;
 }
 async function loadXLSX(){
-  if(window.XLSX) return window.XLSX;
-  await new Promise<void>((resolve,reject)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
-    s.async=true;
-    s.onload=()=>resolve();
-    s.onerror=()=>reject(new Error('کتابخانه اکسل بارگذاری نشد'));
-    document.head.appendChild(s);
-  });
-  return window.XLSX;
+  try {
+    const mod:any = await import('xlsx');
+    return mod.default || mod;
+  } catch (e) {
+    console.error('XLSX import failed', e);
+    throw new Error('کتابخانه اکسل در پروژه نصب یا بارگذاری نشده است');
+  }
 }
 
 const uid=()=> globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random()}`;
@@ -110,7 +106,36 @@ function useLocal<T>(key:string,fallback:T){
 }
 function upsertLocal<T extends {id:string}>(arr:T[], row:T){return arr.some(x=>x.id===row.id)?arr.map(x=>x.id===row.id?row:x):[row,...arr]}
 
-export default function App(){
+class ClientErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean; message: string; stack?: string}> {
+  constructor(props:{children:ReactNode}){ super(props); this.state={hasError:false,message:''}; }
+  static getDerivedStateFromError(error:any){ return {hasError:true, message: error?.message || String(error || 'خطای ناشناخته')}; }
+  componentDidCatch(error:any, info:ErrorInfo){
+    console.error('IHOS runtime error:', error, info);
+    if(typeof window !== 'undefined') window.__IHOS_ERROR__ = { error: String(error?.stack || error), componentStack: info.componentStack };
+  }
+  render(){
+    if(this.state.hasError){
+      return <div dir="rtl" className="fatalScreen">
+        <div className="fatalCard">
+          <div className="fatalLogo">IH</div>
+          <h1>خطای برنامه کنترل شد</h1>
+          <p>برنامه کرش نکرد؛ یک خطای Runtime گرفته شد. برای ادامه، حالت امن را اجرا کن یا اطلاعات خطا را برای بررسی بفرست.</p>
+          <pre>{this.state.message}</pre>
+          <div className="fatalActions">
+            <button onClick={()=>{localStorage.clear(); location.reload();}}>پاک‌سازی کامل داده مرورگر و اجرای مجدد</button>
+            <button onClick={()=>location.reload()}>بارگذاری دوباره</button>
+            <button onClick={()=>navigator.clipboard?.writeText(JSON.stringify(window.__IHOS_ERROR__||{}, null, 2))}>کپی گزارش خطا</button>
+          </div>
+        </div>
+      </div>;
+    }
+    return this.props.children;
+  }
+}
+
+export default function App(){ return <ClientErrorBoundary><IHOSApp/></ClientErrorBoundary> }
+
+function IHOSApp(){
   const [me,setMe]=useLocal<User|null>('ihos-session',null);
   const [settingsRaw,setSettingsRaw]=useLocal<Partial<AppSettings>>('ihos-settings-local',DEFAULT_SETTINGS);
   const [roles,setRoles]=useLocal<Role[]>('ihos-roles',initialRoles);
@@ -156,7 +181,7 @@ export default function App(){
   useEffect(()=>{document.documentElement.dir='rtl';const dark=settings.theme==='dark'||(settings.theme==='system'&&window.matchMedia?.('(prefers-color-scheme: dark)').matches);document.body.classList.toggle('dark',dark);document.documentElement.style.setProperty('--brand',settings.brandColor||'#2563eb');if(settings.faviconUrl){let link=document.querySelector("link[rel~='icon']") as HTMLLinkElement|null;if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link)}link.href=settings.faviconUrl}},[settings]);
   useEffect(()=>{syncAll(); if(typeof navigator!=='undefined' && 'serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});} },[]);
   useEffect(()=>{if(!me)return;const timer=setInterval(checkReminders,30000);checkReminders();return()=>clearInterval(timer)},[me,reminders,tasks,settings.notifications]);
-  useEffect(()=>{if(!me||!online)return;let channel:any;getSupabaseClient().then(db=>{if(!db)return;channel=db.channel('ihos-live').on('postgres_changes',{event:'INSERT',schema:'public',table:'ihos_notifications',filter:`user_id=eq.${me.id}`},(payload:any)=>{const n=payload.new as Notif;setNotifs([n,...notifs.filter(x=>x.id!==n.id)]);browserNotify(n.title,n.body||'');}).on('postgres_changes',{event:'*',schema:'public',table:'ihos_tasks'},()=>syncTable('ihos_tasks',setTasks)).subscribe();});return()=>{if(channel) getSupabaseClient().then(db=>db?.removeChannel(channel))}},[me,online]);
+  useEffect(()=>{if(!me||!online)return;let channel:any;getSupabaseClient().then(db=>{if(!db)return;channel=db.channel('ihos-live').on('postgres_changes',{event:'INSERT',schema:'public',table:'ihos_notifications',filter:`user_id=eq.${me.id}`},(payload:any)=>{const n=payload.new as Notif;setNotifs([n,...notifs.filter(x=>x.id!==n.id)]);browserNotify(n.title,n.body||'');}).on('postgres_changes',{event:'*',schema:'public',table:'ihos_tasks'},()=>syncTable('ihos_tasks',setTasks)).subscribe();}).catch(e=>console.error('Realtime init failed', e));return()=>{if(channel) getSupabaseClient().then(db=>db?.removeChannel(channel)).catch(()=>{})}},[me,online]);
 
   async function syncTable(table:string,setter:(rows:any)=>void){const db=await getSupabaseClient();if(!db)return;const {data,error}=await db.from(table).select('*').order('created_at',{ascending:false});if(!error&&data) setter(data)}
   async function syncSettings(){const db=await getSupabaseClient();if(!db)return;const {data}=await db.from('ihos_settings').select('*');if(data?.length){const next={...DEFAULT_SETTINGS};data.forEach((r:any)=>(next as any)[r.key]=r.value);setSettings(next)}}

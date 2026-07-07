@@ -1,6 +1,6 @@
 {
-  "name": "iran-hotel-os-enterprise-v6-ui-reference",
-  "version": "6.0.0",
+  "name": "iran-hotel-os-enterprise-v6-2-crash-proof",
+  "version": "6.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,7 +11,9 @@
     "lucide-react": "0.468.0",
     "next": "15.5.9",
     "react": "19.1.2",
-    "react-dom": "19.1.2"
+    "react-dom": "19.1.2",
+    "@supabase/supabase-js": "2.83.0",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
