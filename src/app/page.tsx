@@ -259,34 +259,53 @@ export default function App(){
     { id:'settings', label:'تنظیمات', icon:<Settings size={17}/>, adminOnly:true },
   ].filter(t => !t.adminOnly || isAdmin);
 
-  return <main className="min-h-screen">
+  return <main className="min-h-screen crmApp">
     <Header currentUser={currentUser} syncMode={syncMode} logout={()=>{setLogged(false);setTab('dashboard')}} healthScore={healthScore} />
-    <div className="max-w-[1500px] mx-auto px-4 py-5">
-      <section className="hero card p-5 mb-4">
-        <div>
-          <p className="text-sm text-teal-700 font-black flex gap-2 items-center"><Sparkles size={18}/> IHO Task Center Enterprise V4.2</p>
-          <h1 className="text-3xl md:text-4xl font-black mt-2">مرکز فرماندهی تیم تأمین ایران‌هتل</h1>
-          <p className="text-gray-500 mt-2">تسک، هتل، کارشناس، KPI، پیگیری و گزارش مدیریتی در یک پنل آنلاین.</p>
+    <div className="crmShell">
+      <aside className="crmSidebar">
+        <div className="crmBrand">
+          <div className="crmLogo"><Building2 size={22}/></div>
+          <div>
+            <b>IHO Supply CRM</b>
+            <span>Enterprise Command</span>
+          </div>
         </div>
-        <div className="heroScore"><span>امتیاز سلامت کارتابل</span><b>{healthScore}</b><small>از ۱۰۰</small></div>
+        <nav className="crmNavList">
+          {tabs.map(t => <button key={t.id} className={'crmNav '+(tab===t.id?'active':'')} onClick={()=>setTab(t.id)}>{t.icon}<span>{t.label}</span></button>)}
+        </nav>
+        <div className="crmSideFooter">
+          <div className="sideMetric"><span>وضعیت اتصال</span><b>{syncMode==='supabase'?'Online':'Local'}</b></div>
+          <div className="sideMetric"><span>Health Score</span><b>{healthScore}/100</b></div>
+          <button className="btn secondary w-full" onClick={exportCsv}><Download size={16}/> خروجی CSV</button>
+        </div>
+      </aside>
+      <section className="crmWorkspace">
+        <section className="crmHero mb-4">
+          <div>
+            <p className="eyebrow"><Sparkles size={18}/> IHO Task Center · CRM UI Kit V4.3</p>
+            <h1>مرکز فرماندهی تیم تأمین ایران‌هتل</h1>
+            <p>طراحی بازسازی‌شده با الگوی CRMهای مدرن: Sidebar سازمانی، Dashboard مدیریتی، کارت‌های تمیز، فیلترهای سریع و تجربه کاری سریع‌تر.</p>
+          </div>
+          <div className="heroScore"><span>امتیاز سلامت کارتابل</span><b>{healthScore}</b><small>از ۱۰۰</small></div>
+        </section>
+
+        <section className="crmToolbar mb-4">
+          <div className="toolbarTitle"><b>{tabs.find(t=>t.id===tab)?.label}</b><span>{visible.length} آیتم قابل مشاهده</span></div>
+          <div className="flex flex-wrap gap-2"><button className="btn" onClick={()=>openCreate()}><Plus size={17}/> تسک جدید</button><button className="btn secondary" onClick={exportCsv}><Download size={17}/> خروجی CSV</button></div>
+        </section>
+
+        {['kanban','list','hotels','reports'].includes(tab) && <Filters q={q} setQ={setQ} statusFilter={statusFilter} setStatusFilter={setStatusFilter} assigneeFilter={assigneeFilter} setAssigneeFilter={setAssigneeFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} teamMembers={teamMembers} hotelFilter={hotelFilter} clearHotel={()=>setHotelFilter(null)} />}
+
+        {tab==='dashboard' && <Dashboard visible={visible} tasks={tasks} kpi={kpi} openTask={setSelected} teamMembers={teamMembers} openCreate={openCreate} setTab={setTab} />}
+        {tab==='kanban' && <Kanban visible={visible} patchTask={patchTask} openTask={setSelected} />}
+        {tab==='list' && <TaskList visible={visible} openTask={setSelected} patchTask={patchTask} />}
+        {tab==='hotels' && <HotelsPage q={q} tasks={tasks} openHotel={setHotelModal} openCreate={openCreate} setHotelFilter={setHotelFilter} />}
+        {tab==='reports' && <Reports tasks={visible} members={teamMembers} />}
+        {tab==='templates' && isAdmin && <TemplatesPage templates={templates} setTemplates={setTemplates} openCreate={openCreate} createFromTemplate={createFromTemplate} teamMembers={teamMembers} />}
+        {tab==='team' && <TeamPage tasks={tasks} members={teamMembers} />}
+        {tab==='admin' && isAdmin && <AdminTeamPage members={teamMembers} setMembers={saveTeam} tasks={tasks} />}
+        {tab==='settings' && isAdmin && <SettingsPage syncMode={syncMode} tasks={tasks} setTasks={setTasks} />}
       </section>
-
-      <section className="card p-3 mb-4 flex flex-wrap gap-2 items-center justify-between">
-        <div className="flex flex-wrap gap-2">{tabs.map(t => <button key={t.id} className={'navTab '+(tab===t.id?'active':'')} onClick={()=>setTab(t.id)}>{t.icon}{t.label}</button>)}</div>
-        <div className="flex flex-wrap gap-2"><button className="btn" onClick={()=>openCreate()}><Plus size={17}/> تسک جدید</button><button className="btn secondary" onClick={exportCsv}><Download size={17}/> خروجی CSV</button></div>
-      </section>
-
-      {['kanban','list','hotels','reports'].includes(tab) && <Filters q={q} setQ={setQ} statusFilter={statusFilter} setStatusFilter={setStatusFilter} assigneeFilter={assigneeFilter} setAssigneeFilter={setAssigneeFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} teamMembers={teamMembers} hotelFilter={hotelFilter} clearHotel={()=>setHotelFilter(null)} />}
-
-      {tab==='dashboard' && <Dashboard visible={visible} tasks={tasks} kpi={kpi} openTask={setSelected} teamMembers={teamMembers} openCreate={openCreate} setTab={setTab} />}
-      {tab==='kanban' && <Kanban visible={visible} patchTask={patchTask} openTask={setSelected} />}
-      {tab==='list' && <TaskList visible={visible} openTask={setSelected} patchTask={patchTask} />}
-      {tab==='hotels' && <HotelsPage q={q} tasks={tasks} openHotel={setHotelModal} openCreate={openCreate} setHotelFilter={setHotelFilter} />}
-      {tab==='reports' && <Reports tasks={visible} members={teamMembers} />}
-      {tab==='templates' && isAdmin && <TemplatesPage templates={templates} setTemplates={setTemplates} openCreate={openCreate} createFromTemplate={createFromTemplate} teamMembers={teamMembers} />}
-      {tab==='team' && <TeamPage tasks={tasks} members={teamMembers} />}
-      {tab==='admin' && isAdmin && <AdminTeamPage members={teamMembers} setMembers={saveTeam} tasks={tasks} />}
-      {tab==='settings' && isAdmin && <SettingsPage syncMode={syncMode} tasks={tasks} setTasks={setTasks} />}
     </div>
     {showForm && <TaskForm form={form} setForm={setForm} save={saveForm} close={()=>setShowForm(false)} teamMembers={teamMembers} />}
     {selected && <TaskModal task={selected} currentUser={currentUser} patchTask={patchTask} removeTask={removeTask} close={()=>setSelected(null)} openEdit={openEdit} />}

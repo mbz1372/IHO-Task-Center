@@ -1,6 +1,6 @@
 {
-  "name": "iho-task-center-enterprise-v42",
-  "version": "4.2.0",
+  "name": "iho-task-center-enterprise-v43-crm-ui-kit",
+  "version": "4.3.0",
   "private": true,
   "engines": {
     "node": "24.x"
