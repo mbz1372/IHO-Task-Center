@@ -1,22 +1,35 @@
--- Supabase schema for online/realtime version
-create table if not exists tasks (
+-- IHO Task Center - Supabase online schema
+-- Run this in Supabase SQL Editor, then add env vars in Vercel:
+-- NEXT_PUBLIC_SUPABASE_URL
+-- NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+create table if not exists public.iho_tasks (
   id text primary key,
-  title text not null,
-  hotel_id int,
-  hotel_name text,
-  city text,
-  category text,
-  priority text,
-  status text,
-  assignee text,
-  manager text,
-  due_date date,
-  description text,
-  comments jsonb default '[]'::jsonb,
+  payload jsonb not null,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-alter table tasks enable row level security;
-create policy "public read" on tasks for select using (true);
-create policy "public insert" on tasks for insert with check (true);
-create policy "public update" on tasks for update using (true);
+
+create or replace function public.set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_iho_tasks_updated_at on public.iho_tasks;
+create trigger trg_iho_tasks_updated_at before update on public.iho_tasks
+for each row execute function public.set_updated_at();
+
+alter table public.iho_tasks enable row level security;
+
+drop policy if exists "iho_tasks_select" on public.iho_tasks;
+drop policy if exists "iho_tasks_insert" on public.iho_tasks;
+drop policy if exists "iho_tasks_update" on public.iho_tasks;
+drop policy if exists "iho_tasks_delete" on public.iho_tasks;
+
+create policy "iho_tasks_select" on public.iho_tasks for select using (true);
+create policy "iho_tasks_insert" on public.iho_tasks for insert with check (true);
+create policy "iho_tasks_update" on public.iho_tasks for update using (true);
+create policy "iho_tasks_delete" on public.iho_tasks for delete using (true);
