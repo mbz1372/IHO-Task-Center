@@ -1,23 +1,7 @@
-# Changelog
-
-## V2.3.0
-
-- Upgrade Next.js from vulnerable 15.1.6 to patched 15.5.9.
-- Upgrade React / React DOM to 19.1.2.
-- Keep Node.js 24.x for Vercel current runtime.
-- Keep stable npm install command; no pnpm/corepack.
-- No package-lock forced to avoid Vercel install conflicts.
-
-
-## V2.4 Client Runtime Fix
-- Fixed React runtime crash caused by string style props after login.
-- Added task normalization for localStorage/Supabase payloads.
-- Fixed loading state after successful Supabase fetch.
-
-
-## V2.5 Admin Team Management
-- Added admin-only team management panel.
-- Added create/edit/deactivate team members.
-- Added member KPI cards and workload indicators.
-- Added Supabase schema for shared team members.
-- Added safer dynamic assignee/manager lists based on active members.
+# V3 Super
+- اضافه شدن Command Center مدیریتی
+- اضافه شدن تب گزارش و Leaderboard
+- اضافه شدن قالب‌های آماده تسک و ساخت گروهی
+- تقویت مدیریت تیم و نقش‌ها
+- بهبود UI و کارت‌های KPI
+- افزایش پایداری Runtime و Vercel

@@ -1,16 +1,9 @@
 {
-  "name": "iho-task-center-enterprise",
-  "version": "2.5.0",
+  "name": "iho-task-center-super",
+  "version": "3.0.0",
   "private": true,
-  "engines": {
-    "node": "24.x"
-  },
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint || true"
-  },
+  "engines": { "node": "24.x" },
+  "scripts": { "dev": "next dev", "build": "next build", "start": "next start", "lint": "next lint || true" },
   "dependencies": {
     "@supabase/supabase-js": "2.49.1",
     "lucide-react": "0.468.0",
@@ -26,6 +19,5 @@
     "postcss": "8.5.1",
     "tailwindcss": "3.4.17",
     "typescript": "5.8.3"
-  },
-  "description": "IHO Task Center admin team management runtime stable"
+  }
 }

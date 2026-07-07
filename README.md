@@ -1,52 +1,36 @@
-# IHO Task Center Enterprise V2.5
+# IHO Task Center Super V3
 
-نسخه پایدار برای Vercel با Next.js پچ‌شده و بدون هشدار CVE-2025-66478.
+نسخه Super برای مدیریت تسک، هتل، تیم تامین، گزارش مدیریتی و کارتابل کارشناسان ایران‌هتل.
 
 ## Deploy روی Vercel
+1. فایل‌ها را در GitHub قرار دهید.
+2. روی Vercel ایمپورت کنید.
+3. Node.js روی 24.x باشد.
+4. Build Command: `npm run build`
+5. Install Command: `npm install --no-audit --no-fund --legacy-peer-deps --no-package-lock`
 
-1. فایل‌ها را داخل ریپوی `IHO-Task-Center` جایگزین کنید.
-2. در Vercel روی Redeploy بزنید.
-3. اگر می‌خواهید همه کارشناسان داده مشترک داشته باشند، Supabase را فعال کنید.
-
-## Environment Variables اختیاری برای Supabase
+## Supabase اختیاری
+اگر Env های زیر را وارد نکنید، برنامه با LocalStorage کار می‌کند.
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
-بعد از ساخت پروژه Supabase، فایل زیر را در SQL Editor اجرا کنید:
+برای Supabase فایل `src/app/schema.sql` را اجرا کنید.
 
-```txt
-src/app/schema.sql
-```
+## ورود
+- محمدباقر ذوالفقاری = مدیر کل و دسترسی کامل
+- سایر کاربران = دسترسی محدود بر اساس نقش
 
-اگر این دو متغیر تنظیم نشوند، اپلیکیشن با Local Storage اجرا می‌شود.
-
-## نسخه‌ها
-
-- Node.js: 24.x
-- Next.js: 15.5.9
-- React: 19.1.2
-- TypeScript: 5.8.3
-
-## Login آزمایشی
-
-در صفحه ورود، یکی از کاربران را انتخاب کنید. برای نسخه MVP پسورد واقعی فعال نیست.
-
-## امکانات
-
-- RTL فارسی
-- داشبورد KPI
-- Kanban تسک‌ها
-- List View
-- پرونده هتل
-- تیم و عملکرد کارشناسان
-- مدیریت کارشناس‌ها فقط برای مدیر کل
-- افزودن/ویرایش/غیرفعال‌سازی اعضای تیم
-- KPI هر عضو و پیشنهادهای مدیریتی
-- ساخت/ویرایش/حذف تسک
-- کامنت و Timeline
-- چک‌لیست تسک
+## امکانات V3
+- داشبورد مدیریتی Super
+- Kanban تسک‌ها با Drag & Drop
+- لیست تسک‌ها و فیلتر پیشرفته
+- پرونده هتل‌ها و ایجاد سریع تسک برای هتل
+- مدیریت کامل کارشناس‌ها فقط برای مدیر
+- قالب‌های آماده تسک و ایجاد گروهی تسک
+- گزارش عملکرد کارشناس‌ها و زون‌ها
 - خروجی CSV
-- اتصال اختیاری Supabase Realtime
+- اعلان‌ها و هشدارهای مدیریتی
+- Supabase Realtime اختیاری
