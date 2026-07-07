@@ -1,6 +1,16 @@
--- IranHotel Operations System Enterprise V3 schema
--- Run in Supabase SQL Editor. Safe to run over previous versions.
+-- IranHotel Operations System Enterprise V4 schema
+-- Safe to run over previous versions in Supabase SQL Editor.
 create extension if not exists pgcrypto;
+
+create table if not exists ihos_roles (
+  id text primary key,
+  title text not null,
+  description text,
+  permissions jsonb default '{}'::jsonb,
+  is_system boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
 
 create table if not exists ihos_users (
   id text primary key,
@@ -8,6 +18,7 @@ create table if not exists ihos_users (
   username text unique not null,
   password_hash text not null default '123456',
   role text not null default 'کارشناس',
+  role_id text,
   team text,
   zone text,
   mobile text,
@@ -17,6 +28,7 @@ create table if not exists ihos_users (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+alter table ihos_users add column if not exists role_id text;
 
 create table if not exists ihos_hotels (
   id text primary key,
@@ -33,7 +45,6 @@ create table if not exists ihos_hotels (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-
 alter table ihos_hotels add column if not exists hotel_code text;
 alter table ihos_hotels add column if not exists country text;
 alter table ihos_hotels add column if not exists hotel_group text;
@@ -55,6 +66,19 @@ alter table ihos_hotels add column if not exists contract_date text;
 alter table ihos_hotels add column if not exists site_visible boolean default true;
 alter table ihos_hotels add column if not exists search_visible boolean default true;
 
+create table if not exists ihos_projects (
+  id text primary key,
+  title text not null,
+  description text,
+  owner_id text,
+  member_ids jsonb default '[]'::jsonb,
+  status text default 'فعال',
+  deadline date,
+  pinned_note text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 create table if not exists ihos_tasks (
   id text primary key,
   title text not null,
@@ -69,7 +93,38 @@ create table if not exists ihos_tasks (
   assigned_name text,
   created_by text,
   deadline date,
+  due_time text,
   completed_at timestamptz,
+  labels jsonb default '[]'::jsonb,
+  collaborator_ids jsonb default '[]'::jsonb,
+  project_id text,
+  pinned_note text,
+  estimated_minutes integer default 0,
+  spent_minutes integer default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+alter table ihos_tasks add column if not exists due_time text;
+alter table ihos_tasks add column if not exists labels jsonb default '[]'::jsonb;
+alter table ihos_tasks add column if not exists collaborator_ids jsonb default '[]'::jsonb;
+alter table ihos_tasks add column if not exists project_id text;
+alter table ihos_tasks add column if not exists pinned_note text;
+alter table ihos_tasks add column if not exists estimated_minutes integer default 0;
+alter table ihos_tasks add column if not exists spent_minutes integer default 0;
+
+create table if not exists ihos_task_activities (
+  id text primary key,
+  task_id text not null,
+  title text not null,
+  description text,
+  assigned_to text,
+  is_done boolean default false,
+  done_at timestamptz,
+  done_by text,
+  due_date date,
+  due_time text,
+  estimated_minutes integer default 0,
+  spent_minutes integer default 0,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -84,8 +139,12 @@ create table if not exists ihos_documents (
   storage_path text,
   notes text,
   uploaded_by text,
-  created_at timestamptz default now()
+  pinned boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
+alter table ihos_documents add column if not exists pinned boolean default false;
+alter table ihos_documents add column if not exists updated_at timestamptz default now();
 
 create table if not exists ihos_calendar_events (
   id text primary key,
@@ -96,7 +155,8 @@ create table if not exists ihos_calendar_events (
   user_id text,
   hotel_id text,
   color text,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
 
 create table if not exists ihos_notifications (
@@ -110,18 +170,78 @@ create table if not exists ihos_notifications (
   created_at timestamptz default now()
 );
 
+create table if not exists ihos_activity_logs (
+  id text primary key,
+  user_id text,
+  user_name text,
+  action text not null,
+  entity text not null,
+  entity_id text,
+  title text,
+  duration_minutes integer default 0,
+  created_at timestamptz default now()
+);
+
+create table if not exists ihos_reminders (
+  id text primary key,
+  title text not null,
+  body text,
+  user_id text,
+  task_id text,
+  notify_at timestamptz not null,
+  is_done boolean default false,
+  is_sent boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists ihos_automations (
+  id text primary key,
+  title text not null,
+  enabled boolean default true,
+  trigger_type text default 'task_created',
+  trigger_category text,
+  assign_to text,
+  priority text,
+  status text,
+  reminder_minutes integer,
+  label text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists ihos_goals (
+  id text primary key,
+  title text not null,
+  user_id text,
+  category text,
+  target_count integer default 0,
+  start_date date not null,
+  end_date date not null,
+  metric text default 'activities_done',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 create table if not exists ihos_settings (
   key text primary key,
   value jsonb,
   updated_at timestamptz default now()
 );
 
-insert into ihos_users (id, full_name, username, password_hash, role, team, zone, is_active)
+insert into ihos_roles (id,title,description,permissions,is_system)
 values
-('u-admin','محمدباقر ذوالفقاری','admin','123456','مدیر سیستم','مدیریت تأمین','کل کشور',true),
-('u-1','فاطمه رنجبر','ranjbar','123456','کارشناس نرخ و ظرفیت','شرق و جنوب','شرق و جنوب',true),
-('u-2','پگاه واعظین','vaezin','123456','کارشناس نرخ و ظرفیت','شمال و غرب','شمال و غرب',true),
-('u-3','فائزه سالاری','salari','123456','کارشناس نرخ و ظرفیت','مرکز','مرکز',true)
+('role-admin','مدیر سیستم','دسترسی کامل','{"dashboard":true,"tasks":true,"tasks_create":true,"tasks_edit":true,"tasks_delete":true,"assignments":true,"hotels":true,"hotels_import":true,"calendar":true,"documents":true,"documents_upload":true,"team":true,"roles":true,"logs":true,"reminders":true,"automations":true,"goals":true,"projects":true,"settings":true,"notifications":true}'::jsonb,true),
+('role-city','سیتی منیجر','مدیریت منطقه و تیم','{"dashboard":true,"tasks":true,"tasks_create":true,"tasks_edit":true,"assignments":true,"hotels":true,"calendar":true,"documents":true,"documents_upload":true,"reminders":true,"projects":true,"notifications":true,"logs":true}'::jsonb,true),
+('role-expert','کارشناس','اجرای تسک‌های شخصی','{"dashboard":true,"tasks":true,"tasks_edit":true,"hotels":true,"calendar":true,"documents":true,"reminders":true,"notifications":true}'::jsonb,true)
+on conflict (id) do nothing;
+
+insert into ihos_users (id, full_name, username, password_hash, role, role_id, team, zone, is_active)
+values
+('u-admin','محمدباقر ذوالفقاری','admin','123456','مدیر سیستم','role-admin','مدیریت تأمین','کل کشور',true),
+('u-1','فاطمه رنجبر','ranjbar','123456','کارشناس','role-expert','شرق و جنوب','شرق و جنوب',true),
+('u-2','پگاه واعظین','vaezin','123456','کارشناس','role-expert','شمال و غرب','شمال و غرب',true),
+('u-3','فائزه سالاری','salari','123456','سیتی منیجر','role-city','مرکز','مرکز',true)
 on conflict (id) do nothing;
 
 insert into ihos_hotels (id,title,city,province,star,status,contract_status,provider,capacity_total,site_visible,search_visible)
@@ -131,40 +251,40 @@ values
 ('h-3','هتل آریان کیش','کیش','هرمزگان',4,'فعال','فعال','IHO Provider',73,true,true)
 on conflict (id) do nothing;
 
--- Storage bucket for contracts, logos, favicons, settings assets
 insert into storage.buckets (id, name, public)
 values ('ihos-documents', 'ihos-documents', true)
 on conflict (id) do update set public = true;
 
--- RLS policies for internal MVP. Replace with Supabase Auth/RBAC when moving to hardened production.
+alter table ihos_roles enable row level security;
 alter table ihos_users enable row level security;
 alter table ihos_hotels enable row level security;
+alter table ihos_projects enable row level security;
 alter table ihos_tasks enable row level security;
+alter table ihos_task_activities enable row level security;
 alter table ihos_documents enable row level security;
 alter table ihos_calendar_events enable row level security;
 alter table ihos_notifications enable row level security;
+alter table ihos_activity_logs enable row level security;
+alter table ihos_reminders enable row level security;
+alter table ihos_automations enable row level security;
+alter table ihos_goals enable row level security;
 alter table ihos_settings enable row level security;
 
-drop policy if exists "ihos_users_all" on ihos_users;
-drop policy if exists "ihos_hotels_all" on ihos_hotels;
-drop policy if exists "ihos_tasks_all" on ihos_tasks;
-drop policy if exists "ihos_documents_all" on ihos_documents;
-drop policy if exists "ihos_calendar_events_all" on ihos_calendar_events;
-drop policy if exists "ihos_notifications_all" on ihos_notifications;
-drop policy if exists "ihos_settings_all" on ihos_settings;
-create policy "ihos_users_all" on ihos_users for all using (true) with check (true);
-create policy "ihos_hotels_all" on ihos_hotels for all using (true) with check (true);
-create policy "ihos_tasks_all" on ihos_tasks for all using (true) with check (true);
-create policy "ihos_documents_all" on ihos_documents for all using (true) with check (true);
-create policy "ihos_calendar_events_all" on ihos_calendar_events for all using (true) with check (true);
-create policy "ihos_notifications_all" on ihos_notifications for all using (true) with check (true);
-create policy "ihos_settings_all" on ihos_settings for all using (true) with check (true);
+-- MVP internal policies. Harden with Supabase Auth for production.
+do $$
+declare t text;
+begin
+  foreach t in array array['ihos_roles','ihos_users','ihos_hotels','ihos_projects','ihos_tasks','ihos_task_activities','ihos_documents','ihos_calendar_events','ihos_notifications','ihos_activity_logs','ihos_reminders','ihos_automations','ihos_goals','ihos_settings'] loop
+    execute format('drop policy if exists %I on %I', t || '_all', t);
+    execute format('create policy %I on %I for all using (true) with check (true)', t || '_all', t);
+  end loop;
+end$$;
 
-drop policy if exists "ihos_storage_read" on storage.objects;
-drop policy if exists "ihos_storage_insert" on storage.objects;
-drop policy if exists "ihos_storage_update" on storage.objects;
-drop policy if exists "ihos_storage_delete" on storage.objects;
-create policy "ihos_storage_read" on storage.objects for select using (bucket_id = 'ihos-documents');
-create policy "ihos_storage_insert" on storage.objects for insert with check (bucket_id = 'ihos-documents');
-create policy "ihos_storage_update" on storage.objects for update using (bucket_id = 'ihos-documents') with check (bucket_id = 'ihos-documents');
-create policy "ihos_storage_delete" on storage.objects for delete using (bucket_id = 'ihos-documents');
+drop policy if exists ihos_storage_read on storage.objects;
+drop policy if exists ihos_storage_insert on storage.objects;
+drop policy if exists ihos_storage_update on storage.objects;
+drop policy if exists ihos_storage_delete on storage.objects;
+create policy ihos_storage_read on storage.objects for select using (bucket_id = 'ihos-documents');
+create policy ihos_storage_insert on storage.objects for insert with check (bucket_id = 'ihos-documents');
+create policy ihos_storage_update on storage.objects for update using (bucket_id = 'ihos-documents') with check (bucket_id = 'ihos-documents');
+create policy ihos_storage_delete on storage.objects for delete using (bucket_id = 'ihos-documents');
