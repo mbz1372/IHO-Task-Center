@@ -1,44 +1,14 @@
-# IHO Task Center Enterprise V4.1
+# IranHotel Operations System V1
 
-نسخه سازمانی داخلی برای تیم تامین ایران‌هتل.
+Next.js + Supabase + RTL Persian CRM/Operations dashboard.
 
-## امکانات V4
+## Deploy
+1. Upload to GitHub.
+2. Deploy on Vercel.
+3. Add env vars:
+   - NEXT_PUBLIC_SUPABASE_URL
+   - NEXT_PUBLIC_SUPABASE_ANON_KEY
+4. Run `src/app/schema.sql` in Supabase SQL Editor.
+5. Redeploy.
 
-- ورود با رمز عبور برای همه کاربران
-- رمز پیش‌فرض اولیه: `123456`
-- مدیریت کارشناس‌ها و تیم فقط برای مدیر
-- ذخیره آنلاین تغییرات تیم در Supabase
-- جدول امن `iho_user_auth` برای رمزها؛ رمزها در جدول عمومی تیم ذخیره نمی‌شوند
-- Realtime برای تسک‌ها و تیم
-- داشبورد، Kanban، لیست، هتل‌ها، گزارش، قالب‌های تسک و CSV
-
-## مراحل Deploy
-
-1. فایل‌ها را در GitHub جایگزین کن.
-2. در Supabase، فایل `src/app/schema.sql` را در SQL Editor اجرا کن.
-3. در Vercel Environment Variables این‌ها باید وجود داشته باشند:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_xxx
-SUPABASE_URL=https://xxxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxx یا service_role key
-```
-
-اگر Supabase/Vercel Integration را زده باشی، معمولاً `SUPABASE_URL` و `SUPABASE_SERVICE_ROLE_KEY` خودکار اضافه شده‌اند.
-
-4. Redeploy بزن.
-
-## ورود اولیه
-
-برای همه کاربران seeded، رمز اولیه `123456` است. بعد از ورود مدیر، از بخش «مدیریت کارشناس‌ها» برای هر نفر رمز جدید بگذار.
-
-
-
-## V4.1 Fix
-- حذف اعضای تیم اکنون از Supabase هم انجام می‌شود و بعد از Refresh برنمی‌گردد.
-- کاربر حذف‌شده در جدول احراز هویت غیرفعال می‌شود.
-- Seed خودکار برای مدیریت تیم دیگر باعث برگشت اعضای حذف‌شده نمی‌شود.
-
-## V4.3 CRM UI Kit
-این نسخه از نظر ظاهر و تجربه کاربری بازطراحی شده و با همان Supabase قبلی کار می‌کند. نیازی به اجرای مجدد SQL نیست مگر اینکه از نسخه‌های خیلی قدیمی‌تر آمده باشید.
+Default password: `123456`

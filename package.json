@@ -1,30 +1,9 @@
 {
-  "name": "iho-task-center-enterprise-v43-crm-ui-kit",
-  "version": "4.3.0",
-  "private": true,
-  "engines": {
-    "node": "24.x"
-  },
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint || true"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "2.49.1",
-    "lucide-react": "0.468.0",
-    "next": "15.5.9",
-    "react": "19.1.2",
-    "react-dom": "19.1.2"
-  },
-  "devDependencies": {
-    "@types/node": "24.0.15",
-    "@types/react": "19.1.8",
-    "@types/react-dom": "19.1.6",
-    "autoprefixer": "10.4.20",
-    "postcss": "8.5.1",
-    "tailwindcss": "3.4.17",
-    "typescript": "5.8.3"
-  }
+  "name":"iran-hotel-operations-system",
+  "version":"1.0.0",
+  "private":true,
+  "scripts":{"dev":"next dev","build":"next build","start":"next start"},
+  "dependencies":{"@supabase/supabase-js":"2.76.1","next":"15.5.9","react":"19.1.1","react-dom":"19.1.1","lucide-react":"0.468.0"},
+  "devDependencies":{"@types/node":"24.10.0","@types/react":"19.2.2","@types/react-dom":"19.2.2","typescript":"5.9.3"},
+  "engines":{"node":"24.x"}
 }
