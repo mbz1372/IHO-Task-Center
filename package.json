@@ -1,6 +1,6 @@
 {
-  "name": "iran-hotel-operations-system-enterprise",
-  "version": "3.0.0",
+  "name": "iran-hotel-os-super-app",
+  "version": "5.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

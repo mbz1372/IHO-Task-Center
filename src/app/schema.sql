@@ -231,9 +231,9 @@ create table if not exists ihos_settings (
 
 insert into ihos_roles (id,title,description,permissions,is_system)
 values
-('role-admin','مدیر سیستم','دسترسی کامل','{"dashboard":true,"tasks":true,"tasks_create":true,"tasks_edit":true,"tasks_delete":true,"assignments":true,"hotels":true,"hotels_import":true,"calendar":true,"documents":true,"documents_upload":true,"team":true,"roles":true,"logs":true,"reminders":true,"automations":true,"goals":true,"projects":true,"settings":true,"notifications":true}'::jsonb,true),
-('role-city','سیتی منیجر','مدیریت منطقه و تیم','{"dashboard":true,"tasks":true,"tasks_create":true,"tasks_edit":true,"assignments":true,"hotels":true,"calendar":true,"documents":true,"documents_upload":true,"reminders":true,"projects":true,"notifications":true,"logs":true}'::jsonb,true),
-('role-expert','کارشناس','اجرای تسک‌های شخصی','{"dashboard":true,"tasks":true,"tasks_edit":true,"hotels":true,"calendar":true,"documents":true,"reminders":true,"notifications":true}'::jsonb,true)
+('role-admin','مدیر سیستم','دسترسی کامل','{"dashboard":true,"crm360":true,"reports":true,"tasks":true,"tasks_create":true,"tasks_edit":true,"tasks_delete":true,"assignments":true,"hotels":true,"hotels_import":true,"calendar":true,"documents":true,"documents_upload":true,"team":true,"roles":true,"logs":true,"reminders":true,"automations":true,"goals":true,"projects":true,"settings":true,"notifications":true}'::jsonb,true),
+('role-city','سیتی منیجر','مدیریت منطقه و تیم','{"dashboard":true,"crm360":true,"reports":true,"tasks":true,"tasks_create":true,"tasks_edit":true,"assignments":true,"hotels":true,"calendar":true,"documents":true,"documents_upload":true,"reminders":true,"projects":true,"notifications":true,"logs":true}'::jsonb,true),
+('role-expert','کارشناس','اجرای تسک‌های شخصی','{"dashboard":true,"crm360":true,"reports":true,"tasks":true,"tasks_edit":true,"hotels":true,"calendar":true,"documents":true,"reminders":true,"notifications":true}'::jsonb,true)
 on conflict (id) do nothing;
 
 insert into ihos_users (id, full_name, username, password_hash, role, role_id, team, zone, is_active)
@@ -288,3 +288,77 @@ create policy ihos_storage_read on storage.objects for select using (bucket_id =
 create policy ihos_storage_insert on storage.objects for insert with check (bucket_id = 'ihos-documents');
 create policy ihos_storage_update on storage.objects for update using (bucket_id = 'ihos-documents') with check (bucket_id = 'ihos-documents');
 create policy ihos_storage_delete on storage.objects for delete using (bucket_id = 'ihos-documents');
+
+
+-- V5 Super App extensions for CRM-grade future modules
+create table if not exists ihos_contacts (
+  id text primary key,
+  hotel_id text,
+  full_name text not null,
+  position text,
+  mobile text,
+  phone text,
+  email text,
+  is_primary boolean default false,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table if not exists ihos_interactions (
+  id text primary key,
+  hotel_id text,
+  contact_id text,
+  user_id text,
+  type text default 'call',
+  subject text,
+  body text,
+  result text,
+  next_follow_up timestamptz,
+  duration_minutes integer default 0,
+  pinned boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table if not exists ihos_pipelines (
+  id text primary key,
+  title text not null,
+  entity text default 'hotel',
+  stages jsonb default '[]'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table if not exists ihos_saved_views (
+  id text primary key,
+  title text not null,
+  user_id text,
+  entity text,
+  filters jsonb default '{}'::jsonb,
+  columns jsonb default '[]'::jsonb,
+  is_shared boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table if not exists ihos_templates (
+  id text primary key,
+  title text not null,
+  type text,
+  payload jsonb default '{}'::jsonb,
+  created_by text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table ihos_contacts enable row level security;
+alter table ihos_interactions enable row level security;
+alter table ihos_pipelines enable row level security;
+alter table ihos_saved_views enable row level security;
+alter table ihos_templates enable row level security;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['ihos_contacts','ihos_interactions','ihos_pipelines','ihos_saved_views','ihos_templates'] loop
+    execute format('drop policy if exists %I on %I', t || '_all', t);
+    execute format('create policy %I on %I for all using (true) with check (true)', t || '_all', t);
+  end loop;
+end$$;
