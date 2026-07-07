@@ -1,27 +1,27 @@
-# IranHotel Operations System Enterprise v2
+# IranHotel Operations System Enterprise V3
 
-A production-oriented internal operations app for IranHotel supply team.
+نسخه سازمانی آنلاین با Supabase + Vercel.
 
-## Deploy
-1. Upload to GitHub.
-2. Connect to Vercel.
-3. Add Vercel env vars:
-   - NEXT_PUBLIC_SUPABASE_URL
-   - NEXT_PUBLIC_SUPABASE_ANON_KEY
-4. Run `src/app/schema.sql` in Supabase SQL Editor.
-5. Redeploy without cache.
+## امکانات اضافه‌شده در V3
+- نوتیفیکیشن داخلی و Chrome Notification برای کاربر مسئول تسک
+- دیت‌پیکر شمسی اختصاصی برای ددلاین تسک و رویداد تقویم
+- تقویم شمسی ماهانه با نمایش تسک‌های هر روز و رویدادها
+- ورود گروهی هتل‌ها از فایل Excel مطابق فرمت فایل ایران‌هتل
+- آپلود فایل قراردادها و اسناد در Supabase Storage
+- مدیریت کامل تنظیمات شامل نام سیستم، زیرعنوان، رنگ برند، لوگو، favicon، تنظیمات اعلان و اسناد
+- اتصال آنلاین با Supabase از طریق CDN Client برای Build پایدار روی Vercel
 
-Default login: `admin` / `123456`
+## نصب
+1. محتوا را روی GitHub جایگزین کن.
+2. در Supabase فایل `src/app/schema.sql` را اجرا کن.
+3. در Vercel این Environment Variable ها را داشته باش:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+4. در Vercel Redeploy بدون Cache بزن.
 
-## Modules
-- Dashboard
-- Task Center with global modal
-- Hotel CRM
-- Team/User management with edit/delete
-- Persian calendar display
-- Document center
-- Chrome notifications
-- Settings persisted to Supabase
-- Dark/Light mode
-- CSV export
-- Realtime sync for task/user/settings changes
+## ورود اولیه
+- username: `admin`
+- password: `123456`
+
+## نکته
+برای Excel Import، مرورگر کتابخانه SheetJS را از CDN بارگذاری می‌کند. در محیط آنلاین Vercel این کار انجام می‌شود.
