@@ -92,12 +92,27 @@ const initialHotels:HotelT[]=[{id:'h-1',title:'هتل درویشی',city:'مشه
 const initialTasks:Task[]=[{id:'t-1',title:'دریافت ظرفیت آخر هفته',description:'پیگیری ظرفیت باز برای پنجشنبه و جمعه',hotel_id:'h-1',hotel_title:'هتل درویشی',city:'مشهد',priority:'فوری',status:'جدید',category:'ظرفیت',assigned_to:'u-1',assigned_name:'فاطمه رنجبر',deadline:today(),due_time:'14:00',created_by:'u-admin',labels:['پیک','ظرفیت'],collaborator_ids:['u-3'],pinned_note:'هتل VIP است؛ پیگیری با اولویت بالا انجام شود.',created_at:nowIso()}];
 const initialActivities:TaskActivity[]=[{id:'a-1',task_id:'t-1',title:'تماس با رزرواسیون',assigned_to:'u-1',is_done:false,due_date:today(),due_time:'12:00',estimated_minutes:15,created_at:nowIso()},{id:'a-2',task_id:'t-1',title:'ثبت ظرفیت در پنل',assigned_to:'u-1',is_done:false,due_date:today(),due_time:'14:00',estimated_minutes:20,created_at:nowIso()}];
 
-function useLocal<T>(key:string,fallback:T){const [v,setV]=useState<T>(fallback);useEffect(()=>{try{const raw=localStorage.getItem(key); if(raw) setV(JSON.parse(raw))}catch{}},[key]);const save=(next:T)=>{setV(next);try{localStorage.setItem(key,JSON.stringify(next))}catch{}};return [v,save] as const;}
+function normalizeLocalValue<T>(parsed:any,fallback:T):T{
+  try{
+    if(Array.isArray(fallback)) return (Array.isArray(parsed)?parsed:fallback) as T;
+    if(fallback && typeof fallback==='object'){
+      if(!parsed || typeof parsed!=='object' || Array.isArray(parsed)) return fallback;
+      return {...(fallback as any),...parsed} as T;
+    }
+    return (parsed ?? fallback) as T;
+  }catch{return fallback}
+}
+function useLocal<T>(key:string,fallback:T){
+  const [v,setV]=useState<T>(fallback);
+  useEffect(()=>{try{const raw=localStorage.getItem(key); if(raw) setV(normalizeLocalValue(JSON.parse(raw),fallback))}catch{setV(fallback)}},[key]);
+  const save=(next:T)=>{const safe=normalizeLocalValue(next,fallback);setV(safe);try{localStorage.setItem(key,JSON.stringify(safe))}catch{}};
+  return [v,save] as const;
+}
 function upsertLocal<T extends {id:string}>(arr:T[], row:T){return arr.some(x=>x.id===row.id)?arr.map(x=>x.id===row.id?row:x):[row,...arr]}
 
 export default function App(){
   const [me,setMe]=useLocal<User|null>('ihos-session',null);
-  const [settings,setSettings]=useLocal<AppSettings>('ihos-settings-local',DEFAULT_SETTINGS);
+  const [settingsRaw,setSettingsRaw]=useLocal<Partial<AppSettings>>('ihos-settings-local',DEFAULT_SETTINGS);
   const [roles,setRoles]=useLocal<Role[]>('ihos-roles',initialRoles);
   const [users,setUsers]=useLocal<User[]>('ihos-users',initialUsers);
   const [hotels,setHotels]=useLocal<HotelT[]>('ihos-hotels',initialHotels);
@@ -114,12 +129,28 @@ export default function App(){
 
   const [online,setOnline]=useState(false),[busy,setBusy]=useState(false),[toastMsg,setToastMsg]=useState(''),[view,setView]=useState<PermissionKey>('dashboard'),[q,setQ]=useState('');
   const [modal,setModal]=useState<string|null>(null),[editing,setEditing]=useState<any>(null);
-  const currentRole=roles.find(r=>r.id===me?.role_id)||roles.find(r=>r.title===me?.role);
-  const admin=!!me && ((me.role||'').includes('مدیر') || currentRole?.permissions?.roles===true && currentRole?.permissions?.settings===true);
-  const can=(p:PermissionKey)=> admin || !!currentRole?.permissions?.[p];
-  const categories=settings.taskCategories.split(/[،,]/).map(x=>x.trim()).filter(Boolean);
-  const statuses=settings.taskStatuses.split(/[،,]/).map(x=>x.trim()).filter(Boolean);
-  const labels=settings.labels.split(/[،,]/).map(x=>x.trim()).filter(Boolean);
+  const settings = {...DEFAULT_SETTINGS, ...(settingsRaw||{})} as AppSettings;
+  const setSettings = (next:Partial<AppSettings>) => setSettingsRaw({...DEFAULT_SETTINGS, ...(next||{})});
+  const safeRoles = Array.isArray(roles) ? roles : initialRoles;
+  const safeUsers = Array.isArray(users) ? users : initialUsers;
+  const safeHotels = Array.isArray(hotels) ? hotels : initialHotels;
+  const safeTasks = Array.isArray(tasks) ? tasks : initialTasks;
+  const safeActivities = Array.isArray(activities) ? activities : initialActivities;
+  const safeDocs = Array.isArray(docs) ? docs : [];
+  const safeEvents = Array.isArray(events) ? events : [];
+  const safeNotifs = Array.isArray(notifs) ? notifs : [];
+  const safeLogs = Array.isArray(logs) ? logs : [];
+  const safeReminders = Array.isArray(reminders) ? reminders : [];
+  const safeAutomations = Array.isArray(automations) ? automations : [];
+  const safeGoals = Array.isArray(goals) ? goals : [];
+  const safeProjects = Array.isArray(projects) ? projects : [];
+  const currentRole=safeRoles.find(r=>r.id===me?.role_id)||safeRoles.find(r=>r.title===me?.role);
+  const rolePerms = (currentRole && typeof currentRole.permissions === 'object' && currentRole.permissions) ? currentRole.permissions : defaultPerms(false);
+  const admin=!!me && ((me.role||'').includes('مدیر') || (rolePerms.roles===true && rolePerms.settings===true));
+  const can=(p:PermissionKey)=> admin || !!rolePerms[p];
+  const categories=String(settings.taskCategories||DEFAULT_SETTINGS.taskCategories).split(/[،,]/).map(x=>x.trim()).filter(Boolean);
+  const statuses=String(settings.taskStatuses||DEFAULT_SETTINGS.taskStatuses).split(/[،,]/).map(x=>x.trim()).filter(Boolean);
+  const labels=String(settings.labels||DEFAULT_SETTINGS.labels).split(/[،,]/).map(x=>x.trim()).filter(Boolean);
 
   useEffect(()=>{const h=(e:any)=>{setToastMsg(e.detail);setTimeout(()=>setToastMsg(''),2800)};window.addEventListener('ihos-toast',h);return()=>window.removeEventListener('ihos-toast',h)},[]);
   useEffect(()=>{document.documentElement.dir='rtl';const dark=settings.theme==='dark'||(settings.theme==='system'&&window.matchMedia?.('(prefers-color-scheme: dark)').matches);document.body.classList.toggle('dark',dark);document.documentElement.style.setProperty('--brand',settings.brandColor||'#2563eb');if(settings.faviconUrl){let link=document.querySelector("link[rel~='icon']") as HTMLLinkElement|null;if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link)}link.href=settings.faviconUrl}},[settings]);
