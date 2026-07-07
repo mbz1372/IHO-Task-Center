@@ -7,3 +7,9 @@
 - Keep Node.js 24.x for Vercel current runtime.
 - Keep stable npm install command; no pnpm/corepack.
 - No package-lock forced to avoid Vercel install conflicts.
+
+
+## V2.4 Client Runtime Fix
+- Fixed React runtime crash caused by string style props after login.
+- Added task normalization for localStorage/Supabase payloads.
+- Fixed loading state after successful Supabase fetch.

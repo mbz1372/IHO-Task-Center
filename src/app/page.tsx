@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Bell, Building2, CalendarDays, CheckCircle2, ChevronLeft, Clock3, Download, Edit3, Filter, LayoutDashboard, ListTodo, LogOut, MessageCircle, Plus, Search, Trash2, Users, Wifi, WifiOff } from 'lucide-react';
 import { hotels } from '@/lib/hotels';
 import { seedTasks } from '@/lib/seed';
@@ -13,15 +13,35 @@ type FormState = {
   id?: string; title: string; hotelId: number; category: Category; priority: Task['priority']; status: Status; assignee: string; manager: string; dueDate: string; description: string; tags: string;
 };
 
-const statusColor: Record<string,string> = {
-  'جدید':'background:#e5e7eb;color:#111827', 'در حال پیگیری':'background:#dbeafe;color:#1d4ed8', 'منتظر پاسخ هتل':'background:#fef3c7;color:#92400e',
-  'نیازمند اصلاح':'background:#ffedd5;color:#c2410c', 'در انتظار تایید':'background:#ede9fe;color:#6d28d9', 'انجام‌شده':'background:#dcfce7;color:#166534', 'لغوشده':'background:#f1f5f9;color:#475569'
+const statusColor: Record<string, CSSProperties> = {
+  'جدید': { background:'#e5e7eb', color:'#111827' },
+  'در حال پیگیری': { background:'#dbeafe', color:'#1d4ed8' },
+  'منتظر پاسخ هتل': { background:'#fef3c7', color:'#92400e' },
+  'نیازمند اصلاح': { background:'#ffedd5', color:'#c2410c' },
+  'در انتظار تایید': { background:'#ede9fe', color:'#6d28d9' },
+  'انجام‌شده': { background:'#dcfce7', color:'#166534' },
+  'لغوشده': { background:'#f1f5f9', color:'#475569' }
 };
-const priorityColor: Record<string,string> = {'فوری':'background:#fee2e2;color:#b91c1c','بالا':'background:#ffedd5;color:#c2410c','متوسط':'background:#dbeafe;color:#1d4ed8','پایین':'background:#f3f4f6;color:#374151'};
+const priorityColor: Record<string, CSSProperties> = {
+  'فوری': { background:'#fee2e2', color:'#b91c1c' },
+  'بالا': { background:'#ffedd5', color:'#c2410c' },
+  'متوسط': { background:'#dbeafe', color:'#1d4ed8' },
+  'پایین': { background:'#f3f4f6', color:'#374151' }
+};
 const today = () => new Date().toISOString().slice(0,10);
 const uid = () => (crypto.randomUUID?.() || Math.random().toString(36).slice(2));
 const isOverdue = (t: Task) => !['انجام‌شده','لغوشده'].includes(t.status) && t.dueDate < today();
 const progress = (t: Task) => t.checklist.length ? Math.round((t.checklist.filter(i => i.done).length / t.checklist.length) * 100) : 0;
+const normalizeTask = (t: Task): Task => ({
+  ...t,
+  tags: Array.isArray(t.tags) ? t.tags : [],
+  checklist: Array.isArray(t.checklist) ? t.checklist : [],
+  comments: Array.isArray(t.comments) ? t.comments : [],
+  activities: Array.isArray(t.activities) ? t.activities : [],
+  updatedAt: t.updatedAt || new Date().toISOString(),
+  createdAt: t.createdAt || new Date().toISOString(),
+  dueDate: t.dueDate || today(),
+});
 
 export default function App(){
   const [logged, setLogged] = useState(false);
@@ -55,11 +75,11 @@ export default function App(){
       if(hasSupabase && supabase){
         const { data, error } = await supabase.from('iho_tasks').select('id,payload').order('updated_at', { ascending:false });
         if(error) throw error;
-        if(data && data.length){ setTasks(data.map((r:any) => r.payload as Task)); setSyncMode('supabase'); return; }
+        if(data && data.length){ setTasks(data.map((r:any) => normalizeTask(r.payload as Task))); setSyncMode('supabase'); setLoading(false); return; }
       }
     }catch(e){ console.warn('Supabase load failed, fallback to localStorage', e); setSyncMode('local'); }
     const raw = localStorage.getItem('iho_tasks_v2') || localStorage.getItem('iho_tasks');
-    setTasks(raw ? JSON.parse(raw) : seedTasks);
+    setTasks(raw ? JSON.parse(raw).map(normalizeTask) : seedTasks.map(normalizeTask));
     setLoading(false);
   }
 

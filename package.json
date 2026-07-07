@@ -1,6 +1,6 @@
 {
   "name": "iho-task-center-enterprise",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "engines": {
     "node": "24.x"
@@ -26,5 +26,6 @@
     "postcss": "8.5.1",
     "tailwindcss": "3.4.17",
     "typescript": "5.8.3"
-  }
+  },
+  "description": "IHO Task Center stable client runtime fix"
 }
