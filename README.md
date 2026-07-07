@@ -1,42 +1,35 @@
-# IHO Task Center Super V3
+# IHO Task Center Enterprise V4
 
-نسخه Super برای مدیریت تسک، هتل، تیم تامین، گزارش مدیریتی و کارتابل کارشناسان ایران‌هتل.
+نسخه سازمانی داخلی برای تیم تامین ایران‌هتل.
 
-## Deploy روی Vercel
-1. فایل‌ها را در GitHub قرار دهید.
-2. روی Vercel ایمپورت کنید.
-3. Node.js روی 24.x باشد.
-4. Build Command: `npm run build`
-5. Install Command: `npm install --no-audit --no-fund --legacy-peer-deps --no-package-lock`
+## امکانات V4
 
-## Supabase اختیاری
-اگر Env های زیر را وارد نکنید، برنامه با LocalStorage کار می‌کند.
+- ورود با رمز عبور برای همه کاربران
+- رمز پیش‌فرض اولیه: `123456`
+- مدیریت کارشناس‌ها و تیم فقط برای مدیر
+- ذخیره آنلاین تغییرات تیم در Supabase
+- جدول امن `iho_user_auth` برای رمزها؛ رمزها در جدول عمومی تیم ذخیره نمی‌شوند
+- Realtime برای تسک‌ها و تیم
+- داشبورد، Kanban، لیست، هتل‌ها، گزارش، قالب‌های تسک و CSV
+
+## مراحل Deploy
+
+1. فایل‌ها را در GitHub جایگزین کن.
+2. در Supabase، فایل `src/app/schema.sql` را در SQL Editor اجرا کن.
+3. در Vercel Environment Variables این‌ها باید وجود داشته باشند:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_xxx
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxx یا service_role key
 ```
 
-برای Supabase فایل `src/app/schema.sql` را اجرا کنید.
+اگر Supabase/Vercel Integration را زده باشی، معمولاً `SUPABASE_URL` و `SUPABASE_SERVICE_ROLE_KEY` خودکار اضافه شده‌اند.
 
-## ورود
-- محمدباقر ذوالفقاری = مدیر کل و دسترسی کامل
-- سایر کاربران = دسترسی محدود بر اساس نقش
+4. Redeploy بزن.
 
-## امکانات V3
-- داشبورد مدیریتی Super
-- Kanban تسک‌ها با Drag & Drop
-- لیست تسک‌ها و فیلتر پیشرفته
-- پرونده هتل‌ها و ایجاد سریع تسک برای هتل
-- مدیریت کامل کارشناس‌ها فقط برای مدیر
-- قالب‌های آماده تسک و ایجاد گروهی تسک
-- گزارش عملکرد کارشناس‌ها و زون‌ها
-- خروجی CSV
-- اعلان‌ها و هشدارهای مدیریتی
-- Supabase Realtime اختیاری
+## ورود اولیه
 
+برای همه کاربران seeded، رمز اولیه `123456` است. بعد از ورود مدیر، از بخش «مدیریت کارشناس‌ها» برای هر نفر رمز جدید بگذار.
 
-## Vercel Settings Fix
-اگر خطای `No Output Directory named public` دیدید، در Vercel مسیر زیر را چک کنید:
-Project Settings → Build and Output Settings → Output Directory
-این فیلد باید خالی باشد یا برای این نسخه توسط `vercel.json` روی `.next` Override می‌شود. Framework Preset هم باید Next.js باشد.
