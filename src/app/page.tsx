@@ -133,6 +133,10 @@ export default function App(){
     }catch(e){
       console.warn('Team API save failed, fallback to client upsert', e);
       if(hasSupabase && supabase){
+        const { data: existingRows } = await supabase.from('iho_team_members').select('id');
+        const incoming = new Set(clean.map(m => m.id));
+        const deleted = (existingRows || []).map((r:any)=>r.id).filter((id:string)=>!incoming.has(id));
+        for(const id of deleted){ await supabase.from('iho_team_members').delete().eq('id', id); }
         const results = await Promise.all(clean.map(m => supabase.from('iho_team_members').upsert({ id:m.id, payload:m })));
         const failed = results.find((r:any)=>r.error);
         if(failed) alert('ذخیره آنلاین تیم انجام نشد: '+failed.error.message);

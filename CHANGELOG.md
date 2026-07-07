@@ -1,3 +1,7 @@
+## V4.1 Team Delete Fix
+- Fixed team deletion persistence on Supabase.
+- Deleted members are removed from iho_team_members and disabled in iho_user_auth.
+
 # V4 Enterprise
 
 - Password login for every team member.
