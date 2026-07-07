@@ -13,3 +13,11 @@
 - Fixed React runtime crash caused by string style props after login.
 - Added task normalization for localStorage/Supabase payloads.
 - Fixed loading state after successful Supabase fetch.
+
+
+## V2.5 Admin Team Management
+- Added admin-only team management panel.
+- Added create/edit/deactivate team members.
+- Added member KPI cards and workload indicators.
+- Added Supabase schema for shared team members.
+- Added safer dynamic assignee/manager lists based on active members.
