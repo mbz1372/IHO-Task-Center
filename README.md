@@ -34,3 +34,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 - خروجی CSV
 - اعلان‌ها و هشدارهای مدیریتی
 - Supabase Realtime اختیاری
+
+
+## Vercel Settings Fix
+اگر خطای `No Output Directory named public` دیدید، در Vercel مسیر زیر را چک کنید:
+Project Settings → Build and Output Settings → Output Directory
+این فیلد باید خالی باشد یا برای این نسخه توسط `vercel.json` روی `.next` Override می‌شود. Framework Preset هم باید Next.js باشد.
