@@ -362,3 +362,82 @@ begin
     execute format('create policy %I on %I for all using (true) with check (true)', t || '_all', t);
   end loop;
 end$$;
+
+-- V7 Full Operations OS modules
+create table if not exists ihos_hotel_communications (
+  id text primary key,
+  hotel_id text,
+  hotel_title text,
+  channel text,
+  contact_person text,
+  result text,
+  next_followup_at timestamptz,
+  created_by text,
+  pinned boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table if not exists ihos_contracts (
+  id text primary key,
+  hotel_id text,
+  hotel_title text,
+  contract_type text,
+  commission text,
+  payment_period integer,
+  start_date date,
+  end_date date,
+  status text default 'در جریان',
+  file_url text,
+  owner_id text,
+  renewal_task_id text,
+  pinned boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table if not exists ihos_saved_views (
+  id text primary key,
+  title text not null,
+  module text not null,
+  filters jsonb default '{}'::jsonb,
+  owner_id text,
+  is_shared boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table if not exists ihos_playbooks (
+  id text primary key,
+  title text not null,
+  category text,
+  steps jsonb default '[]'::jsonb,
+  sla_hours integer default 24,
+  auto_create_activities boolean default true,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create table if not exists ihos_internal_messages (
+  id text primary key,
+  body text not null,
+  sender_id text,
+  mentioned_user_ids jsonb default '[]'::jsonb,
+  entity_type text,
+  entity_id text,
+  is_read_by jsonb default '[]'::jsonb,
+  created_at timestamptz default now()
+);
+create table if not exists ihos_sla_rules (
+  id text primary key,
+  category text not null,
+  title text not null,
+  sla_hours integer not null default 24,
+  priority text,
+  active boolean default true,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+do $$ begin alter publication supabase_realtime add table ihos_hotel_communications; exception when duplicate_object then null; when undefined_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table ihos_contracts; exception when duplicate_object then null; when undefined_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table ihos_saved_views; exception when duplicate_object then null; when undefined_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table ihos_playbooks; exception when duplicate_object then null; when undefined_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table ihos_internal_messages; exception when duplicate_object then null; when undefined_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table ihos_sla_rules; exception when duplicate_object then null; when undefined_object then null; end $$;

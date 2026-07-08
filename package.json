@@ -1,6 +1,6 @@
 {
-  "name": "iran-hotel-os-enterprise-v6-3-runtime-fix",
-  "version": "6.3.0",
+  "name": "iran-hotel-os-enterprise-v7-full-operations-os",
+  "version": "7.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
