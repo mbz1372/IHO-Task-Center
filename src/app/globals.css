@@ -44,3 +44,14 @@ html,body{font-family:var(--font-fa);font-feature-settings:"ss01" 1,"tnum" 1;let
 @media(max-width:1100px){.superKpis{grid-template-columns:repeat(2,1fr)}.settingsGrid,.superGrid{grid-template-columns:1fr}.ruleRow{grid-template-columns:1fr 1fr}.ruleRow input:first-child,.ruleRow input:last-child{grid-column:1/-1}}
 @media(max-width:640px){.superHead{align-items:flex-start;gap:14px;flex-direction:column}.superKpis{grid-template-columns:1fr}.filterBar{flex-wrap:wrap}.filterBar input,.filterBar select{width:100%}}
 .workflowTable{min-width:1550px}.workflowTable input,.workflowTable select,.workflowTable textarea{width:100%;min-width:130px;border:1px solid var(--border);border-radius:9px;padding:7px;background:var(--card);color:var(--text);margin:2px 0}.workflowTable textarea{min-height:68px;resize:vertical}.workflowTable td{vertical-align:top}.uploadBox small{display:block;color:var(--muted);font-size:11px;margin-top:4px}.importMsg{white-space:pre-wrap;line-height:1.8}
+
+/* Import hotels V4 - explicit interactive state */
+.importHotelsBox{display:flex;flex-direction:column;align-items:stretch;gap:12px;text-align:center}
+.importHotelsBox>svg{margin:0 auto}
+.filePickerBtn{display:inline-flex;align-items:center;justify-content:center;align-self:center;min-width:170px;padding:11px 18px;border-radius:12px;background:#eef4ff;color:#1d4ed8;font-weight:800;cursor:pointer;border:1px solid #bfdbfe}
+.filePickerBtn input{display:none}
+.importSummary{display:grid;gap:4px;padding:12px 14px;border-radius:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;text-align:right}
+.importSummary span,.importSummary small{font-size:12px}
+.importError{white-space:pre-wrap;text-align:right;background:#fff1f2;border:1px solid #fecdd3;padding:10px;border-radius:10px}
+.importHotelsBox .previewTable{max-height:220px;overflow:auto;text-align:right}
+.importHotelsBox .btn[disabled]{opacity:.55;cursor:not-allowed}
