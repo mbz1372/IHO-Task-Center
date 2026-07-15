@@ -165,7 +165,8 @@ function IHOSApp(){
   const safeProjects = Array.isArray(projects) ? projects : [];
   const currentRole=safeRoles.find(r=>r.id===me?.role_id)||safeRoles.find(r=>r.title===me?.role);
   const rolePerms = (currentRole && typeof currentRole.permissions === 'object' && currentRole.permissions) ? currentRole.permissions : defaultPerms(false);
-  const admin=!!me && ((me.role||'').includes('مدیر') || (rolePerms.roles===true && rolePerms.settings===true));
+  const isSuperAdmin=!!me && (me.username==='admin' || me.role_id==='role-super-admin' || ['سوپر ادمین','super admin','super_admin'].includes((me.role||'').trim().toLowerCase()));
+  const admin=!!me && (isSuperAdmin || (me.role||'').includes('مدیر') || (rolePerms.roles===true && rolePerms.settings===true));
   const can=(p:PermissionKey)=> admin || !!rolePerms[p];
   const categories=String(settings.taskCategories||DEFAULT_SETTINGS.taskCategories).split(/[،,]/).map(x=>x.trim()).filter(Boolean);
   const statuses=String(settings.taskStatuses||DEFAULT_SETTINGS.taskStatuses).split(/[،,]/).map(x=>x.trim()).filter(Boolean);
@@ -225,8 +226,15 @@ function IHOSApp(){
     let from=0;
     let all:any[]=[];
     while(true){
+      // The main Task Manager only needs a lightweight hotel sample. The full hotel dataset
+      // is queried with server-side pagination inside HotelSuperApp.
+      if(table==='ihos_hotels'){
+        const {data,error}=await db.from(table).select('*').order('title',{ascending:true}).range(0,299);
+        if(!error&&data) setter(data);
+        return;
+      }
       let query=db.from(table).select('*').range(from,from+pageSize-1);
-      if(table!=='ihos_hotels') query=query.order('created_at',{ascending:false});
+      query=query.order('created_at',{ascending:false});
       const {data,error}=await query;
       if(error){console.error(`Sync ${table} failed`,error);return}
       const batch=data||[];
@@ -246,7 +254,7 @@ function IHOSApp(){
   function browserNotify(title:string,body:string){if(!settings.notifications || typeof Notification==='undefined')return;if(Notification.permission==='granted') new Notification(title,{body,icon:settings.faviconUrl||settings.logoUrl||undefined});}
   async function requestNotifications(){if(typeof Notification==='undefined'){toast('مرورگر از Notification پشتیبانی نمی‌کند');return}const p=await Notification.requestPermission();toast(p==='granted'?'نوتیفیکیشن مرورگر فعال شد':'دسترسی نوتیفیکیشن داده نشد')}
   async function uploadFile(file:File,folder:string){const db=await getSupabaseClient();if(!db)return URL.createObjectURL(file);const path=`${folder}/${Date.now()}-${file.name.replace(/\s+/g,'-')}`;const {error}=await db.storage.from('ihos-documents').upload(path,file,{upsert:true});if(error){toast('خطای آپلود: '+error.message);return URL.createObjectURL(file)}const {data}=db.storage.from('ihos-documents').getPublicUrl(path);return data.publicUrl}
-  async function remove(table:string,id:string,local:()=>void){if(!confirm('حذف شود؟'))return;setBusy(true);try{await dbDelete(table,id);local();await log('delete',table,id,'حذف رکورد');toast('حذف شد')}catch(e:any){alert(e.message)}finally{setBusy(false)}}
+  async function remove(table:string,id:string,local:()=>void){if(!isSuperAdmin){toast('فقط سوپر ادمین مجاز به حذف اطلاعات است');return}const key=prompt('رمز حذف سوپر ادمین را وارد کنید');if(!key)return;if(!confirm('این رکورد حذف و در سطل بازیافت ثبت شود؟'))return;setBusy(true);try{const res=await fetch('/api/admin/delete',{method:'DELETE',headers:{'Content-Type':'application/json','x-delete-key':key},body:JSON.stringify({action:'delete-row',table,id,actor:{id:me?.id,username:me?.username,name:me?.full_name}})});const out=await res.json();if(!res.ok)throw new Error(out.error||'حذف ناموفق بود');local();await log('delete',table,id,'حذف رکورد توسط سوپر ادمین');toast('حذف شد و در سطل بازیافت ثبت شد')}catch(e:any){alert(e.message)}finally{setBusy(false)}}
 
   async function saveTask(task:Task, acts?:TaskActivity[], reminder?:Partial<Reminder>){
     if(!can(task.id && tasks.some(t=>t.id===task.id)?'tasks_edit':'tasks_create')) return toast('دسترسی کافی نداری');
@@ -282,7 +290,7 @@ function IHOSApp(){
         {view==='inbox'&&can('inbox')&&<OpsModule kind='inbox' me={me} tasks={visibleTasks} hotels={hotels} users={users} logs={logs} reminders={reminders} activities={activities} saveTask={saveTask} openTask={(t:Task)=>openModal('task',t)} setView={setView}/>}
         {view==='executive'&&can('executive')&&<OpsModule kind='executive' me={me} tasks={visibleTasks} hotels={hotels} users={users} logs={logs} reminders={reminders} activities={activities} saveTask={saveTask} openTask={(t:Task)=>openModal('task',t)} setView={setView}/>} 
 
-        {view==='hotelSuperApp'&&can('hotelSuperApp')&&<HotelSuperApp/>}
+        {view==='hotelSuperApp'&&can('hotelSuperApp')&&<HotelSuperApp isSuperAdmin={isSuperAdmin} actor={{id:me.id,username:me.username,name:me.full_name}}/>}
         {view==='crm360'&&can('crm360')&&<CRM360 hotels={hotels} tasks={visibleTasks} docs={docs} users={users} setView={setView} exportHotels={()=>csv(hotels,'ihos-hotels.csv')}/>} 
         {view==='reports'&&can('reports')&&<Reports tasks={visibleTasks} logs={logs} users={users} hotels={hotels} activities={activities} exportTasks={()=>csv(visibleTasks,'ihos-tasks.csv')} exportLogs={()=>csv(logs,'ihos-activity-logs.csv')}/>} 
         {view==='riskRadar'&&can('riskRadar')&&<OpsModule kind='riskRadar' me={me} tasks={visibleTasks} hotels={hotels} users={users} logs={logs} reminders={reminders} activities={activities} saveTask={saveTask} openTask={(t:Task)=>openModal('task',t)} setView={setView}/>} 

@@ -1,0 +1,29 @@
+import {NextRequest,NextResponse} from 'next/server';
+import {createClient} from '@supabase/supabase-js';
+
+const ALLOWED=new Set(['ihos_hotels','ihos_hotel_automation','ihos_provider_rules','ihos_tasks','ihos_task_activities','ihos_documents','ihos_calendar_events','ihos_notifications','ihos_reminders','ihos_goals','ihos_projects','ihos_activity_logs','ihos_users','ihos_roles']);
+const PROTECTED=new Set(['ihos_users','ihos_roles']);
+function adminDb(){const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)throw new Error('SUPABASE_SERVICE_ROLE_KEY در Vercel تنظیم نشده است');return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})}
+export async function DELETE(req:NextRequest){
+ try{
+  const key=req.headers.get('x-delete-key'); if(!process.env.SUPER_ADMIN_DELETE_KEY||key!==process.env.SUPER_ADMIN_DELETE_KEY)return NextResponse.json({error:'رمز حذف سوپر ادمین نامعتبر است'},{status:403});
+  const body=await req.json(); const {action,table,id,actor}=body||{};
+  if(!ALLOWED.has(table))return NextResponse.json({error:'جدول غیرمجاز است'},{status:400});
+  if(action==='clear-table'&&PROTECTED.has(table))return NextResponse.json({error:'پاک‌سازی گروهی کاربران و نقش‌ها ممنوع است'},{status:403});
+  if(action==='delete-row'&&!id)return NextResponse.json({error:'شناسه رکورد الزامی است'},{status:400});
+  const db=adminDb(); let rows:any[]=[];
+  if(action==='delete-row'){
+   const {data,error}=await db.from(table).select('*').eq('id',id);if(error)throw error;rows=data||[];
+  }else if(action==='clear-table'){
+   for(let from=0;;from+=500){const {data,error}=await db.from(table).select('*').range(from,from+499);if(error)throw error;rows.push(...(data||[]));if(!data||data.length<500)break}
+  }else return NextResponse.json({error:'عملیات نامعتبر است'},{status:400});
+  if(rows.length){const archive=rows.map((row:any)=>({source_table:table,source_id:String(row.id??''),payload:row,deleted_by_id:actor?.id||null,deleted_by_username:actor?.username||null,deleted_by_name:actor?.name||null,delete_action:action,deleted_at:new Date().toISOString()}));for(let i=0;i<archive.length;i+=300){const {error}=await db.from('ihos_recycle_bin').insert(archive.slice(i,i+300));if(error)throw error}}
+  if(table==='ihos_hotels'){
+   if(action==='delete-row'){await db.from('ihos_hotel_automation').delete().eq('hotel_id',id);await db.from('ihos_hotels').delete().eq('id',id)}
+   else {await db.from('ihos_hotel_automation').delete().neq('id','__never__');await db.from('ihos_hotels').delete().neq('id','__never__')}
+  }else if(action==='delete-row'){const {error}=await db.from(table).delete().eq('id',id);if(error)throw error}
+  else {const {error}=await db.from(table).delete().neq('id','__never__');if(error)throw error}
+  await db.from('ihos_secure_delete_logs').insert({table_name:table,record_id:id||null,action,deleted_count:rows.length,actor_id:actor?.id||null,actor_username:actor?.username||null,actor_name:actor?.name||null,created_at:new Date().toISOString()});
+  return NextResponse.json({ok:true,deleted:rows.length});
+ }catch(e:any){return NextResponse.json({error:e.message||'خطای حذف'},{status:500})}
+}
