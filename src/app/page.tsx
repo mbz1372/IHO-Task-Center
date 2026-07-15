@@ -2,6 +2,7 @@
 
 import React, { Component, ErrorInfo, ReactNode, useEffect, useMemo, useState } from 'react';
 import HotelSuperApp from '@/components/superapp/HotelSuperApp';
+import * as XLSX from 'xlsx';
 import { createClient } from '@supabase/supabase-js';
 import { Activity, AlarmClock, Archive, Bell, Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Download, Edit3, Eye, FileText, Flag, FolderKanban, Hotel, KeyRound, LayoutDashboard, ListChecks, LogOut, Moon, MoreHorizontal, Palette, Pin, Plus, RefreshCw, Rocket, Save, Search, Settings, Shield, Sparkles, Sun, Tag, Target, Trash2, Upload, UserPlus, Users, Wifi, WifiOff, X } from 'lucide-react';
 
@@ -24,15 +25,7 @@ async function getSupabaseClient(){
     return null;
   }
 }
-async function loadXLSX(){
-  try {
-    const mod:any = await import('xlsx');
-    return mod.default || mod;
-  } catch (e) {
-    console.error('XLSX import failed', e);
-    throw new Error('کتابخانه اکسل در پروژه نصب یا بارگذاری نشده است');
-  }
-}
+async function loadXLSX(){ return XLSX; }
 
 const uid=()=> globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random()}`;
 const nowIso=()=>new Date().toISOString();
