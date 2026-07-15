@@ -216,7 +216,26 @@ function IHOSApp(){
     return()=>{ if(polling) clearInterval(polling); if(channel) getSupabaseClient().then(db=>db?.removeChannel(channel)).catch(()=>{}) }
   },[me,online]);
 
-  async function syncTable(table:string,setter:(rows:any)=>void){const db=await getSupabaseClient();if(!db)return;const {data,error}=await db.from(table).select('*').order('created_at',{ascending:false});if(!error&&data) setter(data)}
+  async function syncTable(table:string,setter:(rows:any)=>void){
+    const db=await getSupabaseClient();
+    if(!db)return;
+    // Supabase/PostgREST normally returns at most 1000 rows per request.
+    // Large tables (especially hotels) must be fetched page by page.
+    const pageSize=1000;
+    let from=0;
+    let all:any[]=[];
+    while(true){
+      let query=db.from(table).select('*').range(from,from+pageSize-1);
+      if(table!=='ihos_hotels') query=query.order('created_at',{ascending:false});
+      const {data,error}=await query;
+      if(error){console.error(`Sync ${table} failed`,error);return}
+      const batch=data||[];
+      all=all.concat(batch);
+      if(batch.length<pageSize)break;
+      from+=pageSize;
+    }
+    setter(all);
+  }
   async function syncSettings(){const db=await getSupabaseClient();if(!db)return;const {data}=await db.from('ihos_settings').select('*');if(data?.length){const next={...DEFAULT_SETTINGS};data.forEach((r:any)=>(next as any)[r.key]=r.value);setSettings(next)}}
   async function syncAll(){setBusy(true);try{const db=await getSupabaseClient();if(!db){setOnline(false);return}setOnline(true);await Promise.all([syncTable('ihos_roles',setRoles),syncTable('ihos_users',setUsers),syncTable('ihos_hotels',setHotels),syncTable('ihos_tasks',setTasks),syncTable('ihos_task_activities',setActivities),syncTable('ihos_documents',setDocs),syncTable('ihos_calendar_events',setEvents),syncTable('ihos_notifications',setNotifs),syncTable('ihos_activity_logs',setLogs),syncTable('ihos_reminders',setReminders),syncTable('ihos_automations',setAutomations),syncTable('ihos_goals',setGoals),syncTable('ihos_projects',setProjects),syncSettings()]);toast('داده‌ها با Supabase سینک شد');}catch(e:any){setOnline(false);toast('اتصال آنلاین برقرار نشد: '+e.message)}finally{setBusy(false)}}
   async function dbUpsert(table:string,row:any){const db=await getSupabaseClient();if(db){const {error}=await db.from(table).upsert(row);if(error) throw error}}
@@ -306,7 +325,17 @@ function IHOSApp(){
 
     {modal==='hotelProfile'&&<HotelProfileModal hotel={editing} tasks={tasks.filter(t=>t.hotel_id===editing?.id)} docs={docs.filter(d=>d.hotel_id===editing?.id)} events={events.filter(e=>e.hotel_id===editing?.id)} logs={logs.filter(l=>l.entity_id===editing?.id || (l.title||'').includes(editing?.title||''))} users={users} close={()=>setModal(null)} editHotel={()=>setModal('hotel')} newTask={()=>{setEditing({id:uid(),title:`پیگیری ${editing?.title||'هتل'}`,hotel_id:editing?.id,hotel_title:editing?.title,city:editing?.city,priority:'متوسط',status:settings.defaultTaskStatus,category:'پیگیری',deadline:today(),due_time:'12:00',labels:[],collaborator_ids:[],created_at:nowIso()});setModal('task')}}/>}
     {modal==='employeeProfile'&&<EmployeeProfileModal user={editing} role={roles.find(r=>r.id===editing?.role_id)} tasks={tasks.filter(t=>t.assigned_to===editing?.id || safeArr<string>(t.collaborator_ids).includes(editing?.id))} activities={activities.filter(a=>a.assigned_to===editing?.id || a.done_by===editing?.id)} logs={logs.filter(l=>l.user_id===editing?.id || l.user_name===editing?.full_name)} projects={projects.filter(p=>p.owner_id===editing?.id || safeArr<string>(p.member_ids).includes(editing?.id))} close={()=>setModal(null)} editUser={()=>setModal('user')}/>}
-    {modal==='importHotels'&&<ImportHotelsModal close={()=>setModal(null)} save={async(rows:HotelT[])=>{const merged=[...hotels];rows.forEach(r=>{const idx=merged.findIndex(h=>h.id===r.id||(h.hotel_code&&r.hotel_code&&h.hotel_code===r.hotel_code));idx>=0?merged[idx]={...merged[idx],...r}:merged.unshift(r)});setHotels(merged);const db=await getSupabaseClient();if(db){const {error}=await db.from('ihos_hotels').upsert(rows as any);if(error)alert(error.message)}await log('import','hotel',undefined,`ورود ${rows.length} هتل از اکسل`);toast(`${rows.length} هتل ذخیره شد`);setModal(null)}}/>}
+    {modal==='importHotels'&&<ImportHotelsModal close={()=>setModal(null)} save={async(rows:HotelT[])=>{const merged=[...hotels];rows.forEach(r=>{const idx=merged.findIndex(h=>h.id===r.id||(h.hotel_code&&r.hotel_code&&h.hotel_code===r.hotel_code));idx>=0?merged[idx]={...merged[idx],...r}:merged.unshift(r)});setHotels(merged);const db=await getSupabaseClient();if(db){
+      const chunkSize=500;
+      let saved=0;
+      for(let i=0;i<rows.length;i+=chunkSize){
+        const chunk=rows.slice(i,i+chunkSize);
+        const {error}=await db.from('ihos_hotels').upsert(chunk as any,{onConflict:'id'});
+        if(error){alert(`ذخیره در ردیف‌های ${i+1} تا ${Math.min(i+chunkSize,rows.length)} ناموفق بود: ${error.message}`);throw error}
+        saved+=chunk.length;
+      }
+      toast(`${saved.toLocaleString('fa-IR')} هتل در Supabase ذخیره شد`);
+    }await log('import','hotel',undefined,`ورود ${rows.length} هتل از اکسل`);await syncTable('ihos_hotels',setHotels);setModal(null)}}/>}
   </div>
 }
 
