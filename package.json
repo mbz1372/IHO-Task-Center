@@ -1,6 +1,6 @@
 {
-  "name": "iran-hotel-os-enterprise-v7-full-operations-os",
-  "version": "7.0.0",
+  "name": "iranhotel-os-enterprise",
+  "version": "16.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,11 +8,13 @@
     "start": "next start"
   },
   "dependencies": {
+    "@fontsource-variable/vazirmatn": "^5.2.8",
     "@supabase/supabase-js": "2.83.0",
     "lucide-react": "0.468.0",
     "next": "15.5.9",
     "react": "^19.1.2",
     "react-dom": "^19.1.2",
+    "recharts": "^2.15.4",
     "xlsx": "0.18.5"
   },
   "devDependencies": {

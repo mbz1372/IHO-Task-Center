@@ -1,107 +1,239 @@
 'use client';
+
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Activity,Building2,CheckCircle2,ChevronLeft,ChevronRight,CloudUpload,Database,ExternalLink,RefreshCcw,Save,Search,Settings2,ShieldAlert,Trash2,Users2,Wifi,WifiOff,X,Plus,MapPin,LockKeyhole} from 'lucide-react';
+import {
+  Activity,ArrowLeft,BarChart3,Building2,CheckCircle2,ChevronLeft,ChevronRight,
+  CloudUpload,Database,Edit3,FileSpreadsheet,Hotel,KeyRound,LockKeyhole,
+  MapPin,Plus,RefreshCcw,Save,Search,Settings2,ShieldAlert,Sparkles,
+  Trash2,TrendingUp,Upload,Users2,Wifi,X
+} from 'lucide-react';
+import {Bar,BarChart,CartesianGrid,Cell,Legend,Pie,PieChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
 import * as XLSX from 'xlsx';
 import {DEFAULT_PROVIDER_RULES} from '@/lib/superapp/automation';
 import type {ProviderRule} from '@/lib/superapp/types';
 import {getSupabase,upsertChunks} from '@/lib/superapp/supabase';
 
-type Row={id:string;hotel_code?:string;title:string;city?:string;province?:string;caring_category?:string;cooperation_status?:string;provider?:string;pms?:string;capacity_total?:number;hotel_rate?:boolean;hotel_capacity?:boolean;rate_expert?:string;capacity_expert?:string;rate_api?:boolean;capacity_api?:boolean;rate_online?:boolean;capacity_online?:boolean;automation_score?:number;automation_status?:string;migration_needed?:boolean;replacement_provider?:string;grade?:string};
-type Stats={all:number;online:number;capacity:number;rate:number;expert:number;offline:number;migrate:number};
+type Row={
+  id:string;hotel_code?:string;title:string;city?:string;province?:string;caring_category?:string;
+  cooperation_status?:string;provider?:string;pms?:string;grade?:string;crm_stage?:string;
+  hotel_rate?:boolean;hotel_capacity?:boolean;rate_expert?:string;capacity_expert?:string;
+  rate_api?:boolean;capacity_api?:boolean;rate_online?:boolean;capacity_online?:boolean;
+  automation_score?:number;automation_status?:string;migration_needed?:boolean;replacement_provider?:string;
+};
+type Stats={all:number;sellable:number;online:number;capacity:number;rate:number;expert:number;offline:number;migrate:number};
 type ExpertRow={expert_name:string;rate_hotels:number;capacity_hotels:number;total_hotels:number};
-const emptyStats:Stats={all:0,online:0,capacity:0,rate:0,expert:0,offline:0,migrate:0};
+type ProviderStat={name:string;count:number;online:number;capacity:number;rate:number;offline:number};
+const COLORS=['#2563eb','#14b8a6','#8b5cf6','#f59e0b','#ef4444','#64748b','#06b6d4'];
+const emptyStats:Stats={all:0,sellable:0,online:0,capacity:0,rate:0,expert:0,offline:0,migrate:0};
 const norm=(v:any)=>String(v??'').replace(/\u200c/g,' ').replace(/[يى]/g,'ی').replace(/ك/g,'ک').replace(/\s+/g,' ').trim().toLowerCase();
+const fa=(n:number)=>Number(n||0).toLocaleString('fa-IR');
+const isSellable=(r:any)=>norm(r?.cooperation_status).includes('در حال همکاری');
 const val=(r:any,names:string[])=>{for(const k of Object.keys(r)){if(names.some(n=>norm(n)===norm(k))&&String(r[k]??'').trim()!=='')return r[k]}return undefined};
 const text=(r:any,names:string[])=>String(val(r,names)??'').trim();
 const yes=(v:any)=>['1','true','yes','بله','فعال','online','بلی'].includes(norm(v));
-const num=(v:any)=>{const n=Number(String(v??'').replace(/,/g,''));return Number.isFinite(n)?n:0};
 async function rowsFromFile(file:File){const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)throw new Error('شیت قابل خواندن پیدا نشد');const rows=XLSX.utils.sheet_to_json(ws,{defval:null,raw:false}) as any[];if(!rows.length)throw new Error('فایل خالی است');return rows}
+async function loadAll(table:string,select='*'){const db=getSupabase();if(!db)return[];const all:any[]=[];for(let from=0;;from+=1000){const{data,error}=await db.from(table).select(select).range(from,from+999);if(error)throw error;const batch=data||[];all.push(...batch);if(batch.length<1000)break}return all}
+
+function enrich(h:any,a:any,rules:ProviderRule[]):Row{
+  const provider=String(a?.provider||h.provider||'IHO Provider').trim()||'IHO Provider';
+  const rule=rules.find(r=>norm(r.name)===norm(provider));
+  const today=new Date().toISOString().slice(0,10);
+  const effective=!rule?.effectiveFrom||rule.effectiveFrom<=today;
+  const rateApi=!!(rule?.active&&effective&&rule.rateApi);
+  const capacityApi=!!(rule?.active&&effective&&rule.capacityApi);
+  const rateExpert=String(a?.rate_expert||'').trim()||undefined;
+  const capacityExpert=String(a?.capacity_expert||'').trim()||undefined;
+  const hotelRate=!!a?.hotel_rate;
+  const hotelCapacity=!!a?.hotel_capacity;
+  const rateOnline=rateApi||(!rateExpert&&hotelRate);
+  const capacityOnline=capacityApi||(!capacityExpert&&hotelCapacity);
+  const score=(rateOnline?50:rateExpert?25:0)+(capacityOnline?50:capacityExpert?35:0);
+  const badProvider=['iho','asa','shab'].includes(norm(provider));
+  const migrationNeeded=badProvider||(!(rateOnline&&capacityOnline)&&!!rule?.replacementProvider);
+  let automationStatus='آفلاین';
+  if(rateOnline&&capacityOnline)automationStatus='۱۰۰٪ آنلاین';
+  else if(badProvider)automationStatus='نیازمند مهاجرت Provider';
+  else if(capacityOnline)automationStatus='ظرفیت آنلاین';
+  else if(rateOnline)automationStatus='نرخ آنلاین';
+  else if(rateExpert||capacityExpert)automationStatus='کارشناس‌محور';
+  return {...h,provider,hotel_rate:hotelRate,hotel_capacity:hotelCapacity,rate_expert:rateExpert,capacity_expert:capacityExpert,rate_api:rateApi,capacity_api:capacityApi,rate_online:rateOnline,capacity_online:capacityOnline,automation_score:score,automation_status:automationStatus,migration_needed:migrationNeeded,replacement_provider:rule?.replacementProvider} as Row;
+}
 
 export default function HotelSuperApp({isSuperAdmin=false,actor,onCreateTask,initialTab='overview'}:{isSuperAdmin?:boolean;actor?:{id?:string;username?:string;name?:string};onCreateTask?:(row:Row)=>void;initialTab?:string}){
- const [rows,setRows]=useState<Row[]>([]),[rules,setRules]=useState<ProviderRule[]>(DEFAULT_PROVIDER_RULES),[stats,setStats]=useState<Stats>(emptyStats),[experts,setExperts]=useState<ExpertRow[]>([]);
- const [tab,setTab]=useState(initialTab),[q,setQ]=useState(''),[provider,setProvider]=useState('all'),[status,setStatus]=useState('all');
- const [page,setPage]=useState(1),[total,setTotal]=useState(0),[busy,setBusy]=useState(false),[msg,setMsg]=useState(''),[selected,setSelected]=useState<Row|null>(null);
- const debounce=useRef<any>(null); const pageSize=40;
- useEffect(()=>{void loadRules();void loadStats();void loadExperts()},[]);
- useEffect(()=>{if(!['hotels','fullyOnline','migration'].includes(tab))return;clearTimeout(debounce.current);debounce.current=setTimeout(()=>void loadPage(),250);return()=>clearTimeout(debounce.current)},[page,q,provider,status,tab]);
- async function loadRules(){const db=getSupabase();if(!db)return;const {data}=await db.from('ihos_provider_rules').select('*').order('priority');if(data?.length)setRules(data.map((x:any)=>({name:x.name,rateApi:x.rate_api,capacityApi:x.capacity_api,active:x.active,effectiveFrom:x.effective_from,replacementProvider:x.replacement_provider,priority:x.priority})))}
- async function loadStats(){const db=getSupabase();if(!db)return;const [{count},{data,error}]=await Promise.all([db.from('ihos_hotels').select('id',{count:'exact',head:true}),db.rpc('ihos_hotel_dashboard_stats')]);const analytic=(!error&&data?data:{}) as Partial<Stats>;setStats({...emptyStats,...analytic,all:count||0})}
- async function loadExperts(){const db=getSupabase();if(!db)return;const {data,error}=await db.from('ihos_expert_workload_v').select('*').order('total_hotels',{ascending:false});if(!error)setExperts((data||[]) as ExpertRow[])}
- async function loadPage(){
-  const db=getSupabase();if(!db){setMsg('Supabase تنظیم نشده است');return}
-  setBusy(true);
-  try{
-    // The hotel file is the source of truth. Query it directly so every imported hotel appears,
-    // even when analytical views or automation rows have not been created yet.
-    let base:any=db.from('ihos_hotels').select('*',{count:'exact'});
-    if(provider!=='all')base=base.eq('provider',provider);
-    if(q.trim()){
-      const search=q.trim().replace(/[%_,]/g,' ');
-      base=base.or(`title.ilike.%${search}%,hotel_code.ilike.%${search}%,city.ilike.%${search}%,province.ilike.%${search}%`);
-    }
-    const from=(page-1)*pageSize;
-    const {data:hotelData,error:hotelError,count}=await base.order('title',{ascending:true}).range(from,from+pageSize-1);
-    if(hotelError)throw hotelError;
-    const hotels=(hotelData||[]) as any[];
-    const ids=hotels.map(h=>h.id).filter(Boolean);
-    let automation:any[]=[];
-    if(ids.length){
-      const {data,error}=await db.from('ihos_hotel_automation').select('*').in('hotel_id',ids);
-      if(error)throw error;automation=data||[];
-    }
-    const byHotel=new Map(automation.map(a=>[a.hotel_id,a]));
-    const today=new Date().toISOString().slice(0,10);
-    const ruleFor=(name:string)=>rules.find(r=>norm(r.name)===norm(name));
-    let enriched:Row[]=hotels.map(h=>{
-      const a=byHotel.get(h.id)||{};
-      const providerName=String(a.provider||h.provider||'IHO Provider').trim()||'IHO Provider';
-      const rule=ruleFor(providerName);
-      const effective=!rule?.effectiveFrom||rule.effectiveFrom<=today;
-      const rateApi=!!(rule?.active&&effective&&rule.rateApi);
-      const capacityApi=!!(rule?.active&&effective&&rule.capacityApi);
-      const rateExpert=String(a.rate_expert||'').trim()||undefined;
-      const capacityExpert=String(a.capacity_expert||'').trim()||undefined;
-      const hotelRate=!!a.hotel_rate;
-      const hotelCapacity=!!a.hotel_capacity;
-      const rateOnline=rateApi||(!rateExpert&&hotelRate);
-      const capacityOnline=capacityApi||(!capacityExpert&&hotelCapacity);
-      const score=(rateOnline?50:rateExpert?25:0)+(capacityOnline?50:capacityExpert?35:0);
-      const badProvider=['iho','asa','shab'].includes(norm(providerName));
-      const migrationNeeded=badProvider||(!(rateOnline&&capacityOnline)&&!!rule?.replacementProvider);
-      let automationStatus='آفلاین';
-      if(rateOnline&&capacityOnline)automationStatus='۱۰۰٪ آنلاین';
-      else if(badProvider)automationStatus='نیازمند مهاجرت Provider';
-      else if(capacityOnline)automationStatus='ظرفیت آنلاین';
-      else if(rateOnline)automationStatus='نرخ آنلاین';
-      else if(rateExpert||capacityExpert)automationStatus='کارشناس‌محور';
-      return {...h,provider:providerName,hotel_rate:hotelRate,hotel_capacity:hotelCapacity,rate_expert:rateExpert,capacity_expert:capacityExpert,rate_api:rateApi,capacity_api:capacityApi,rate_online:rateOnline,capacity_online:capacityOnline,automation_score:score,automation_status:automationStatus,migration_needed:migrationNeeded,replacement_provider:rule?.replacementProvider} as Row;
+  const [master,setMaster]=useState<Row[]>([]);
+  const [rules,setRules]=useState<ProviderRule[]>(DEFAULT_PROVIDER_RULES);
+  const [tab,setTab]=useState(initialTab);
+  const [q,setQ]=useState('');
+  const [provider,setProvider]=useState('all');
+  const [status,setStatus]=useState('all');
+  const [city,setCity]=useState('all');
+  const [scope,setScope]=useState<'sellable'|'all'>('sellable');
+  const [page,setPage]=useState(1);
+  const [busy,setBusy]=useState(true);
+  const [msg,setMsg]=useState('');
+  const [selected,setSelected]=useState<Row|null>(null);
+  const [importMenu,setImportMenu]=useState(false);
+  const pageSize=36;
+
+  async function loadRules(){
+    const db=getSupabase();if(!db)return DEFAULT_PROVIDER_RULES;
+    const {data,error}=await db.from('ihos_provider_rules').select('*').order('priority');
+    if(error||!data?.length)return DEFAULT_PROVIDER_RULES;
+    return data.map((x:any)=>({name:x.name,rateApi:!!x.rate_api,capacityApi:!!x.capacity_api,active:x.active!==false,effectiveFrom:x.effective_from,replacementProvider:x.replacement_provider,priority:x.priority||99}));
+  }
+
+  async function loadData(force=false){
+    setBusy(true);setMsg('در حال همگام‌سازی پرونده‌های هتل...');
+    try{
+      if(force&&typeof window!=='undefined'){sessionStorage.removeItem('ihos-superapp-snapshot-v16');sessionStorage.removeItem('ihos-dashboard-hotel-snapshot-v16')}
+      const cached=typeof window!=='undefined'?sessionStorage.getItem('ihos-superapp-snapshot-v16'):null;
+      if(cached&&!force){
+        try{const p=JSON.parse(cached);if(Date.now()-p.at<5*60*1000){setRules(p.rules);setMaster(p.rows);setMsg(`${fa(p.rows.length)} هتل از کش سریع`);setBusy(false);return}}catch{}
+      }
+      const nextRules=await loadRules();
+      const [hotels,automation]=await Promise.all([
+        loadAll('ihos_hotels','id,hotel_code,title,city,province,caring_category,cooperation_status,provider,pms,grade,crm_stage'),
+        loadAll('ihos_hotel_automation','hotel_id,provider,hotel_rate,hotel_capacity,rate_expert,capacity_expert,updated_at')
+      ]);
+      const autoMap=new Map(automation.map((a:any)=>[a.hotel_id,a]));
+      const rows=hotels.map((h:any)=>enrich(h,autoMap.get(h.id),nextRules));
+      setRules(nextRules);setMaster(rows);setMsg(`${fa(rows.length)} هتل از دیتابیس اصلی دریافت شد`);
+      if(typeof window!=='undefined')sessionStorage.setItem('ihos-superapp-snapshot-v16',JSON.stringify({at:Date.now(),rules:nextRules,rows}));
+    }catch(e:any){setMsg(`خطای دریافت اطلاعات: ${e.message}`)}finally{setBusy(false)}
+  }
+  useEffect(()=>{void loadData()},[]);
+
+  const stats=useMemo(()=>master.reduce((s,r)=>{
+    s.all++;
+    if(!isSellable(r))return s;
+    s.sellable++;
+    if(r.automation_status==='۱۰۰٪ آنلاین')s.online++;
+    else if(r.automation_status==='ظرفیت آنلاین')s.capacity++;
+    else if(r.automation_status==='نرخ آنلاین')s.rate++;
+    else if(r.automation_status==='کارشناس‌محور')s.expert++;
+    else s.offline++;
+    if(r.migration_needed)s.migrate++;
+    return s;
+  },{...emptyStats}),[master]);
+
+  const providerStats=useMemo(()=>{
+    const map=new Map<string,ProviderStat>();
+    master.filter(isSellable).forEach(r=>{const key=r.provider||'بدون Provider';const row=map.get(key)||{name:key,count:0,online:0,capacity:0,rate:0,offline:0};row.count++;if(r.automation_status==='۱۰۰٪ آنلاین')row.online++;else if(r.automation_status==='ظرفیت آنلاین')row.capacity++;else if(r.automation_status==='نرخ آنلاین')row.rate++;else row.offline++;map.set(key,row)});
+    return [...map.values()].sort((a,b)=>b.count-a.count)
+  },[master]);
+
+  const experts=useMemo(()=>{
+    const map=new Map<string,ExpertRow>();
+    master.filter(r=>isSellable(r)&&norm(r.provider)==='iho provider').forEach(r=>{
+      if(r.rate_expert){const e=map.get(r.rate_expert)||{expert_name:r.rate_expert,rate_hotels:0,capacity_hotels:0,total_hotels:0};e.rate_hotels++;map.set(r.rate_expert,e)}
+      if(r.capacity_expert){const e=map.get(r.capacity_expert)||{expert_name:r.capacity_expert,rate_hotels:0,capacity_hotels:0,total_hotels:0};e.capacity_hotels++;map.set(r.capacity_expert,e)}
     });
-    if(status!=='all')enriched=enriched.filter(r=>r.automation_status===status);
-    if(tab==='migration')enriched=enriched.filter(r=>r.migration_needed);
-    if(tab==='fullyOnline')enriched=enriched.filter(r=>r.automation_status==='۱۰۰٪ آنلاین');
-    setRows(enriched);
-    // Count always comes from the master imported table. It is not derived from a view.
-    setTotal(count||0);
-    setMsg(`${(count||0).toLocaleString('fa-IR')} هتل در دیتابیس اصلی`);
-  }catch(e:any){setMsg(`خطای دریافت: ${e.message}`)}finally{setBusy(false)}
- }
- async function refresh(){await Promise.all([loadStats(),loadPage(),loadRules(),loadExperts()])}
- async function importHotels(file:File){setBusy(true);setMsg('در حال پردازش فایل هتل‌ها...');try{const data=await rowsFromFile(file);const now=Date.now();const mapped=data.map((r,i)=>{const code=text(r,['کد هتل','hotel_code','HotelCode','کدهتل']);return {id:code?`hotel-${code}`:`hotel-import-${now}-${i}`,hotel_code:code,title:text(r,['نام هتل','title','HotelName','نام']),country:text(r,['کشور']),province:text(r,['استان','province']),city:text(r,['شهر','city']),hotel_group:text(r,['گروه نوع هتل']),caring_category:text(r,['CaringCategory','caring_category']),hotel_type:text(r,['نوع هتل']),phone:text(r,['تلفن هتل']),reservation_phone:text(r,['تلفن رزرواسیون','تلن رزرواسیون']),capacity_total:num(val(r,['تعداد تخت','ظرفیت کلی هتل','ظرفیت','capacity_total'])),provider:text(r,['نام پروایدر','provider','Provider'])||'IHO Provider',pms:text(r,['PMS']),cooperation_status:text(r,['وضعیت همکاری','cooperation_status']),risk_status:text(r,['وضعیت ریسکی']),hotel_category:text(r,['دسته بندی هتل']),grade:text(r,['درجه هتل']),purchase_period:num(val(r,['دوره خرید'])),payment_period:num(val(r,['دوره پرداخت'])),status_end_date:text(r,['تاریخ پایان وضعیت']),status_start_date:text(r,['تاریخ شروع وضعیت']),contract_date:text(r,['تاریخ قرارداد']),site_visible:yes(val(r,['نمایش در سایت','site_visible'])),search_visible:yes(val(r,['نمایش در نتایج جستجو','search_visible']))}}).filter(x=>x.title&&x.hotel_code);if(!mapped.length)throw new Error('ستون نام هتل یا کد هتل شناسایی نشد');await upsertChunks('ihos_hotels',mapped,300);setMsg(`✅ ${mapped.length.toLocaleString('fa-IR')} هتل ذخیره شد`);setPage(1);await refresh()}catch(e:any){setMsg(`❌ ${e.message}`)}finally{setBusy(false)}}
- async function importExperts(file:File){setBusy(true);setMsg('در حال تطبیق کارشناسان نرخ و ظرفیت...');try{const data=await rowsFromFile(file);const db=getSupabase();if(!db)throw new Error('Supabase تنظیم نشده');const all:any[]=[];for(let from=0;;from+=1000){const {data:h,error}=await db.from('ihos_hotels').select('id,hotel_code,title,provider').range(from,from+999);if(error)throw error;all.push(...(h||[]));if(!h||h.length<1000)break}const byCode=new Map(all.filter(x=>x.hotel_code).map(x=>[norm(x.hotel_code),x]));const byName=new Map<string,any[]>();all.forEach(h=>byName.set(norm(h.title),[...(byName.get(norm(h.title))||[]),h]));const patch=new Map<string,any>();let matched=0,unmatched=0;for(const r of data){const code=text(r,['کد هتل','hotel_code','HotelCode']);const hotelName=text(r,['نام هتل','HotelName','hotel_name']);const task=Number(val(r,['taskId','task id','task_id','TaskId']));const name=text(r,['First name','نام','کارشناس','expert_name','full_name']);if(!name||![1,2].includes(task))continue;let h=code?byCode.get(norm(code)):undefined;if(!h&&hotelName){const c=byName.get(norm(hotelName))||[];if(c.length===1)h=c[0]}if(!h){unmatched++;continue}const old=patch.get(h.id)||{id:h.id,hotel_id:h.id,hotel_code:h.hotel_code,provider:h.provider||'IHO Provider',hotel_rate:false,hotel_capacity:false,updated_at:new Date().toISOString()};if(task===1)old.capacity_expert=name;else old.rate_expert=name;patch.set(h.id,old);matched++}await upsertChunks('ihos_hotel_automation',[...patch.values()],300);setMsg(`✅ ${matched.toLocaleString('fa-IR')} تخصیص ثبت شد؛ ${unmatched.toLocaleString('fa-IR')} مورد تطبیق نشد`);await refresh()}catch(e:any){setMsg(`❌ ${e.message}`)}finally{setBusy(false)}}
- async function destructiveAction(action:'delete-row'|'clear-table',table:string,id?:string,label?:string){if(!isSuperAdmin){setMsg('فقط سوپر ادمین مجاز به حذف اطلاعات است');return}if(!window.confirm(action==='clear-table'?`تمام ${label||table} حذف شود؟`:'این رکورد حذف شود؟'))return;let password='';if(action==='clear-table'){password=window.prompt('رمز حذف کامل داده‌ها را وارد کنید')||'';if(!password)return}setBusy(true);try{const res=await fetch('/api/admin/delete',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,table,id,password,actor:{...actor,isSuperAdmin:true}})});const out=await res.json();if(!res.ok)throw new Error(out.error||'عملیات حذف ناموفق بود');setMsg(`✅ ${out.deleted||1} رکورد حذف شد`);await refresh()}catch(e:any){setMsg(`❌ ${e.message}`)}finally{setBusy(false)}}
- async function saveRules(){setBusy(true);try{await upsertChunks('ihos_provider_rules',rules.map(r=>({id:norm(r.name).replace(/\s+/g,'-'),name:r.name,rate_api:r.rateApi,capacity_api:r.capacityApi,active:r.active,effective_from:r.effectiveFrom||null,replacement_provider:r.replacementProvider||null,priority:r.priority,updated_at:new Date().toISOString()})),50);setMsg('قوانین Provider ذخیره شد');await refresh()}catch(e:any){setMsg(`خطا: ${e.message}`)}finally{setBusy(false)}}
- const providers=useMemo(()=>['all',...rules.map(r=>r.name)],[rules]);const pages=Math.max(1,Math.ceil(total/pageSize));const onlinePct=stats.all?Math.round(stats.online/stats.all*100):0;
- return <div className="hotelOS">
-  <section className="hotelOsHero"><div><span className="eyebrow">IRANHOTEL SUPPLY OS</span><h1>مرکز مدیریت آنلاین‌سازی هتل‌ها</h1><p>تمرکز اصلی: منبع نرخ، منبع ظرفیت قابل فروش، Provider و میزان وابستگی هر هتل به کارشناس.</p></div><div className="heroScore"><strong>{onlinePct}٪</strong><span>۱۰۰٪ آنلاین واقعی</span><small>نرخ و ظرفیت بدون دخالت کارشناس</small></div></section>
-  <div className="hotelOsTabs">{[['overview','نمای مدیریتی'],['hotels','پرونده هتل‌ها'],['fullyOnline','۱۰۰٪ آنلاین'],['experts','تحلیل کارشناسان'],['migration','پیشنهاد مهاجرت'],['providers','Providerها'],['settings','تنظیمات و ورود داده'],['governance','مدیریت داده']].map(([k,l])=><button key={k} className={tab===k?'active':''} onClick={()=>{setTab(k);setPage(1)}}>{l}</button>)}</div>
-  {tab==='overview'&&<><div className="superKpis executiveKpis">{[[Building2,'کل هتل‌های دیتابیس',stats.all],[CheckCircle2,'۱۰۰٪ آنلاین',stats.online],[Wifi,'ظرفیت آنلاین',stats.capacity],[Activity,'نرخ آنلاین',stats.rate],[Users2,'وابسته به کارشناس',stats.expert],[ShieldAlert,'نیازمند مهاجرت',stats.migrate]].map(([I,l,v]:any)=><div className="superKpi" key={l}><I/><div><span>{l}</span><strong>{Number(v||0).toLocaleString('fa-IR')}</strong></div></div>)}</div><div className="hotelInsightGrid"><article className="insightCard"><h3>قاعده آنلاین بودن</h3><p>Providerهای Harris Netminder، Lamasoo، Adotel و Sepehr نرخ و ظرفیت را آنلاین می‌دهند.</p><p>Moghim و VHotel فقط ظرفیت را آنلاین می‌دهند.</p><p>در IHO Provider، آنلاین بودن براساس ثبت نرخ و ظرفیت توسط خود هتل یا کارشناس تعیین می‌شود.</p></article><article className="insightCard"><h3>تمرکز عملیاتی</h3><div className="opportunity"><strong>{stats.expert.toLocaleString('fa-IR')}</strong><span>هتل دارای دخالت کارشناس</span></div><div className="opportunity"><strong>{stats.migrate.toLocaleString('fa-IR')}</strong><span>هتل مناسب مهاجرت Provider</span></div></article></div></>}
-  {['hotels','fullyOnline','migration'].includes(tab)&&<><div className="hotelToolbar"><div className="searchBox"><Search size={18}/><input value={q} onChange={e=>{setQ(e.target.value);setPage(1)}} placeholder="جستجوی نام، کد، شهر یا کارشناس..."/></div><select value={provider} onChange={e=>{setProvider(e.target.value);setPage(1)}}>{providers.map(x=><option key={x} value={x}>{x==='all'?'همه Providerها':x}</option>)}</select><select value={status} onChange={e=>{setStatus(e.target.value);setPage(1)}}><option value="all">همه وضعیت‌ها</option><option>۱۰۰٪ آنلاین</option><option>ظرفیت آنلاین</option><option>نرخ آنلاین</option><option>کارشناس‌محور</option><option>آفلاین</option></select><button className="btn ghost" onClick={refresh}><RefreshCcw size={16}/> تازه‌سازی</button></div><div className="hotelDataTable"><table><thead><tr><th>هتل</th><th>موقعیت</th><th>Provider</th><th>منبع نرخ</th><th>منبع ظرفیت</th><th>وضعیت آنلاین</th><th>اقدام پیشنهادی</th><th>عملیات</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><button className="hotelNameBtn" onClick={()=>setSelected(r)}><span>{r.title?.slice(0,1)}</span><div><b>{r.title}</b><small>کد {r.hotel_code||'—'} • {r.caring_category||'بدون Caring'}</small></div></button></td><td>{r.city||'—'}<small>{r.province||''}</small></td><td><b>{r.provider||'IHO Provider'}</b><small>{r.pms||''}</small></td><td><SourceBadge online={!!r.rate_online} expert={r.rate_expert} api={r.rate_api} hotel={r.hotel_rate}/></td><td><SourceBadge online={!!r.capacity_online} expert={r.capacity_expert} api={r.capacity_api} hotel={r.hotel_capacity}/></td><td><b>{r.automation_score||0}٪</b><small>{r.automation_status}</small></td><td>{r.migration_needed?<b className="migrationText">انتقال به {r.replacement_provider||'Provider آنلاین'}</b>:<span className="okText">بدون اقدام فوری</span>}</td><td><button className="btn ghost" onClick={()=>onCreateTask?.(r)}><Plus size={15}/> ایجاد تسک</button><button className="iconBtn" onClick={()=>setSelected(r)}><ExternalLink size={16}/></button>{isSuperAdmin&&<button className="iconBtn dangerBtn" onClick={()=>destructiveAction('delete-row','ihos_hotels',r.id)}><Trash2 size={16}/></button>}</td></tr>)}</tbody></table>{busy&&<div className="tableLoading">در حال دریافت داده…</div>}</div><div className="pager"><button disabled={page<=1} onClick={()=>setPage(p=>p-1)}><ChevronRight/></button><span>صفحه {page.toLocaleString('fa-IR')} از {pages.toLocaleString('fa-IR')} • {msg}</span><button disabled={page>=pages} onClick={()=>setPage(p=>p+1)}><ChevronLeft/></button></div></>}
-  {tab==='experts'&&<div className="providerGrid">{experts.map(e=><article className="providerCard" key={e.expert_name}><header><div className="providerIcon">{e.expert_name.slice(0,1)}</div><div><h3>{e.expert_name}</h3><small>{e.total_hotels.toLocaleString('fa-IR')} هتل یکتا</small></div></header><div className="providerCapabilities"><span className="on">نرخ: {e.rate_hotels.toLocaleString('fa-IR')} هتل</span><span className="on">ظرفیت: {e.capacity_hotels.toLocaleString('fa-IR')} هتل</span></div></article>)}</div>}
-  {tab==='providers'&&<div className="providerGrid">{rules.map(r=><article className="providerCard" key={r.name}><header><div className="providerIcon">{r.name.slice(0,2)}</div><div><h3>{r.name}</h3><small>{r.active?'فعال':'غیرفعال'}</small></div></header><div className="providerCapabilities"><span className={r.rateApi?'on':'off'}>{r.rateApi?<Wifi/>:<WifiOff/>} نرخ API</span><span className={r.capacityApi?'on':'off'}>{r.capacityApi?<Wifi/>:<WifiOff/>} ظرفیت API</span></div><p>جایگزین پیشنهادی: <b>{r.replacementProvider||'نیاز ندارد'}</b></p></article>)}</div>}
-  {tab==='settings'&&<div className="settingsGrid"><article className="superCard"><h3><CloudUpload/> ورود فایل‌ها</h3><label className="uploadBox"><input type="file" accept=".xlsx,.xls,.csv" onChange={e=>e.target.files?.[0]&&importHotels(e.target.files[0])}/><Database/><div><b>خروجی BI هتل‌ها</b><small>اطلاعات پایه هتل‌ها در دیتابیس ذخیره می‌شود.</small></div></label><label className="uploadBox"><input type="file" accept=".xlsx,.xls,.csv" onChange={e=>e.target.files?.[0]&&importExperts(e.target.files[0])}/><Users2/><div><b>فایل کارشناسان</b><small>Task ID 1 = کارشناس ظرفیت، Task ID 2 = کارشناس نرخ</small></div></label><div className="importMsg">{msg||'فایل را انتخاب کن.'}</div></article><article className="superCard"><h3><Settings2/> ماتریس Provider</h3>{rules.map((r,i)=><div className="ruleRow" key={r.name}><input value={r.name} onChange={e=>setRules(x=>x.map((z,j)=>j===i?{...z,name:e.target.value}:z))}/><label><input type="checkbox" checked={r.rateApi} onChange={e=>setRules(x=>x.map((z,j)=>j===i?{...z,rateApi:e.target.checked}:z))}/> نرخ API</label><label><input type="checkbox" checked={r.capacityApi} onChange={e=>setRules(x=>x.map((z,j)=>j===i?{...z,capacityApi:e.target.checked}:z))}/> ظرفیت API</label><input type="date" value={r.effectiveFrom||''} onChange={e=>setRules(x=>x.map((z,j)=>j===i?{...z,effectiveFrom:e.target.value}:z))}/><input placeholder="Provider جایگزین" value={r.replacementProvider||''} onChange={e=>setRules(x=>x.map((z,j)=>j===i?{...z,replacementProvider:e.target.value}:z))}/></div>)}<button className="btn primary" onClick={saveRules}><Save/> ذخیره تنظیمات</button></article></div>}
-  {tab==='governance'&&<div className="dataGovernance"><div className="governanceHero"><div><LockKeyhole/><div><h3>مرکز مدیریت داده</h3><p>حذف تکی بدون رمز و فقط با تأیید سوپر ادمین انجام می‌شود. حذف کامل هر ماژول نیازمند رمز تنظیم‌شده در تنظیمات سیستم است.</p></div></div></div><div className="dangerGrid">{[['ihos_hotels','اطلاعات هتل‌ها'],['ihos_hotel_automation','وضعیت نرخ و ظرفیت'],['ihos_provider_rules','قوانین Provider']].map(([t,l])=><article className="dangerCard" key={t}><Trash2/><div><h4>{l}</h4><p>پاک‌سازی کامل این ماژول از Supabase</p></div><button disabled={!isSuperAdmin} className="btn danger" onClick={()=>destructiveAction('clear-table',t,undefined,l)}>{isSuperAdmin?'حذف تمام داده‌ها':'فقط سوپر ادمین'}</button></article>)}</div></div>}
-  {selected&&<HotelDrawer row={selected} close={()=>setSelected(null)} createTask={()=>onCreateTask?.(selected)}/>} 
- </div>
+    for(const e of map.values())e.total_hotels=new Set(master.filter(r=>isSellable(r)&&(r.rate_expert===e.expert_name||r.capacity_expert===e.expert_name)).map(r=>r.id)).size;
+    return [...map.values()].sort((a,b)=>b.total_hotels-a.total_hotels)
+  },[master]);
+
+  const providers=useMemo(()=>['all',...new Set(master.map(r=>r.provider||'بدون Provider'))],[master]);
+  const cities=useMemo(()=>['all',...new Set(master.map(r=>r.city).filter(Boolean) as string[])],[master]);
+  const filtered=useMemo(()=>master.filter(r=>{
+    if(scope==='sellable'&&!isSellable(r))return false;
+    if(provider!=='all'&&r.provider!==provider)return false;
+    if(city!=='all'&&r.city!==city)return false;
+    if(status!=='all'&&r.automation_status!==status)return false;
+    if(tab==='fullyOnline'&&r.automation_status!=='۱۰۰٪ آنلاین')return false;
+    if(tab==='migration'&&!r.migration_needed)return false;
+    if(q.trim()&&!norm(`${r.title} ${r.hotel_code||''} ${r.city||''} ${r.provider||''}`).includes(norm(q)))return false;
+    return true
+  }),[master,provider,city,status,scope,tab,q]);
+  const pages=Math.max(1,Math.ceil(filtered.length/pageSize));
+  const rows=filtered.slice((page-1)*pageSize,page*pageSize);
+  useEffect(()=>setPage(1),[q,provider,city,status,scope,tab]);
+
+  async function importHotels(file:File){
+    setBusy(true);setMsg('در حال پردازش فایل هتل‌ها...');
+    try{
+      const data=await rowsFromFile(file);const stamp=Date.now();
+      const mapped=data.map((r,i)=>{const code=text(r,['کد هتل','hotel_code','HotelCode','کدهتل']);return {id:code?`hotel-${code}`:`hotel-import-${stamp}-${i}`,hotel_code:code,title:text(r,['نام هتل','title','HotelName','نام'])||`هتل بدون نام — کد ${code}`,country:text(r,['کشور']),province:text(r,['استان','province']),city:text(r,['شهر','city']),hotel_group:text(r,['گروه نوع هتل']),caring_category:text(r,['CaringCategory','caring_category']),hotel_type:text(r,['نوع هتل']),phone:text(r,['تلفن هتل']),reservation_phone:text(r,['تلفن رزرواسیون','تلن رزرواسیون']),provider:text(r,['نام پروایدر','provider','Provider'])||'IHO Provider',pms:text(r,['PMS']),cooperation_status:text(r,['وضعیت همکاری','cooperation_status']),risk_status:text(r,['وضعیت ریسکی']),hotel_category:text(r,['دسته بندی هتل']),grade:text(r,['درجه هتل']),capacity_total:Number(String(val(r,['ظرفیت کلی هتل','capacity_total'])??'0').replace(/,/g,''))||0,purchase_period:Number(val(r,['دوره خرید','purchase_period'])||0)||undefined,payment_period:Number(val(r,['دوره پرداخت','payment_period'])||0)||undefined,status_start_date:text(r,['تاریخ شروع وضعیت','status_start_date']),status_end_date:text(r,['تاریخ پایان وضعیت','status_end_date']),contract_date:text(r,['تاریخ قرارداد','contract_date']),site_visible:yes(val(r,['نمایش در سایت','site_visible'])),search_visible:yes(val(r,['نمایش در نتایج جستجو','search_visible']))}}).filter(x=>x.hotel_code);
+      if(!mapped.length)throw new Error('ستون نام هتل یا کد هتل شناسایی نشد');
+      await upsertChunks('ihos_hotels',mapped,300);setMsg(`✅ ${fa(mapped.length)} هتل ذخیره شد`);await loadData(true)
+    }catch(e:any){setMsg(`❌ ${e.message}`)}finally{setBusy(false)}
+  }
+
+  async function importExperts(file:File){
+    setBusy(true);setMsg('در حال تطبیق کارشناسان نرخ و ظرفیت...');
+    try{
+      const data=await rowsFromFile(file);const hotelByCode=new Map(master.map(h=>[norm(h.hotel_code),h]));const hotelByTitle=new Map(master.map(h=>[norm(h.title),h]));const merged=new Map<string,any>();
+      data.forEach(r=>{const code=text(r,['کد هتل','hotel_code','HotelCode']);const title=text(r,['نام هتل','هتل','hotel','HotelName']);const h=hotelByCode.get(norm(code))||hotelByTitle.get(norm(title));if(!h)return;const taskId=Number(val(r,['task id','task_id','TaskId','نوع تسک']));const expert=text(r,['نام','نام کارشناس','کارشناس','expert_name','full_name']);if(!expert||![1,2].includes(taskId))return;const row=merged.get(h.id)||{id:`automation-${h.id}`,hotel_id:h.id,hotel_code:h.hotel_code,provider:h.provider||'IHO Provider',hotel_rate:!!h.hotel_rate,hotel_capacity:!!h.hotel_capacity};if(taskId===1)row.capacity_expert=expert;if(taskId===2)row.rate_expert=expert;row.updated_at=new Date().toISOString();merged.set(h.id,row)});
+      await upsertChunks('ihos_hotel_automation',[...merged.values()],300);setMsg(`✅ تخصیص ${fa(merged.size)} هتل بروزرسانی شد`);await loadData(true)
+    }catch(e:any){setMsg(`❌ ${e.message}`)}finally{setBusy(false)}
+  }
+
+  async function saveRule(rule:ProviderRule){
+    const db=getSupabase();if(!db)return;
+    const payload={id:`provider-${norm(rule.name).replace(/\s+/g,'-')}`,name:rule.name,rate_api:rule.rateApi,capacity_api:rule.capacityApi,active:rule.active,effective_from:rule.effectiveFrom||null,replacement_provider:rule.replacementProvider||null,priority:rule.priority};
+    const {error}=await db.from('ihos_provider_rules').upsert(payload,{onConflict:'id'});if(error){setMsg(error.message);return}setRules(rules.map(r=>r.name===rule.name?rule:r));sessionStorage.removeItem('ihos-superapp-snapshot-v16');setMsg('تنظیم Provider ذخیره شد')
+  }
+
+  async function deleteHotel(row:Row){
+    if(!isSuperAdmin)return;
+    if(!confirm(`هتل «${row.title}» حذف شود؟`))return;
+    const res=await fetch('/api/admin/delete',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete-row',table:'ihos_hotels',id:row.id,actor:{...actor,isSuperAdmin:true}})});const out=await res.json();if(!res.ok){setMsg(out.error||'حذف ناموفق بود');return}setMaster(master.filter(h=>h.id!==row.id));setSelected(null);setMsg('هتل حذف و در سطل بازیافت ثبت شد')
+  }
+
+  async function clearTable(table:string,label:string){
+    if(!isSuperAdmin)return;
+    const password=prompt(`رمز حذف کامل برای پاک‌سازی «${label}» را وارد کنید`);if(!password)return;
+    const res=await fetch('/api/admin/delete',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'clear-table',table,password,actor:{...actor,isSuperAdmin:true}})});const out=await res.json();if(!res.ok){setMsg(out.error||'پاک‌سازی ناموفق بود');return}setMsg(`${fa(out.deleted||0)} رکورد پاک شد`);await loadData(true)
+  }
+
+  const onlinePie=[{name:'۱۰۰٪ آنلاین',value:stats.online},{name:'ظرفیت آنلاین',value:stats.capacity},{name:'نرخ آنلاین',value:stats.rate},{name:'کارشناس‌محور',value:stats.expert},{name:'آفلاین',value:stats.offline}].filter(x=>x.value>0);
+  const providerChart=providerStats.slice(0,8).map(x=>({name:x.name,count:x.count,online:x.online}));
+  const tabs=[['overview','نمای مدیریتی',BarChart3],['hotels','پرونده هتل‌ها',Hotel],['fullyOnline','۱۰۰٪ آنلاین',CheckCircle2],['migration','پیشنهاد مهاجرت',TrendingUp],['experts','تحلیل کارشناسان',Users2],['providers','Providerها',Database],['settings','تنظیم آنلاین‌سازی',Settings2],...(isSuperAdmin?[['governance','مدیریت داده',LockKeyhole]]:[])] as any[];
+
+  return <div className="hotelOsV15">
+    <header className="hotelOsHeaderV15">
+      <div><span className="eyebrowV15">HOTEL SUPPLY & ONLINE OPERATIONS</span><h1>سوپر اپ مدیریت هتل</h1><p>مرجع واحد پرونده هتل، منبع نرخ و ظرفیت، Provider، کارشناسان و پیشنهادهای آنلاین‌سازی</p></div>
+      <div className="hotelHeaderActionsV15">{isSuperAdmin&&<button className="btn dataManageV16" onClick={()=>setTab('governance')}><LockKeyhole/> مدیریت و پاک‌سازی داده</button>}<button className="btn ghost" onClick={()=>loadData(true)}><RefreshCcw className={busy?'spin':''}/> بروزرسانی</button><div className="importDropdownV15"><button className="btn primary" onClick={()=>setImportMenu(!importMenu)}><Upload/> ورود اطلاعات</button>{importMenu&&<div><label><FileSpreadsheet/> فایل اصلی هتل‌ها<input type="file" accept=".xlsx,.xls,.csv" onChange={e=>{const f=e.target.files?.[0];if(f)void importHotels(f);setImportMenu(false)}}/></label><label><Users2/> فایل کارشناسان<input type="file" accept=".xlsx,.xls,.csv" onChange={e=>{const f=e.target.files?.[0];if(f)void importExperts(f);setImportMenu(false)}}/></label></div>}</div></div>
+    </header>
+    <nav className="hotelTabsV15">{tabs.map(([id,label,Icon])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon size={17}/><span>{label}</span>{id==='migration'&&stats.migrate>0&&<b>{fa(stats.migrate)}</b>}</button>)}</nav>
+    <div className="hotelSyncV15"><span className={busy?'pulse':''}/><p>{msg||'آماده'}</p></div>
+
+    {tab==='overview'&&<>
+      <section className="hotelMetricGridV15">
+        <Metric title="کل هتل‌ها" value={stats.all} icon={Building2} tone="blue" hint="دیتابیس اصلی"/>
+        <Metric title="قابل فروش" value={stats.sellable} icon={Wifi} tone="cyan" hint="در حال همکاری"/>
+        <Metric title="۱۰۰٪ آنلاین" value={stats.online} icon={CheckCircle2} tone="green" hint={`${Math.round(stats.online/Math.max(1,stats.sellable)*100)}٪ پوشش`}/>
+        <Metric title="ظرفیت آنلاین" value={stats.capacity} icon={Activity} tone="purple" hint="نرخ نیازمند اقدام"/>
+        <Metric title="کارشناس‌محور" value={stats.expert} icon={Users2} tone="orange" hint="وابسته به عملیات دستی"/>
+        <Metric title="نیازمند مهاجرت" value={stats.migrate} icon={ShieldAlert} tone="red" hint="Provider نامناسب"/>
+      </section>
+      <section className="hotelChartsV15">
+        <article className="chartCardV15"><div className="chartHeadV15"><div><span>ترکیب وضعیت</span><h3>سطح آنلاین‌سازی هتل‌ها</h3></div></div><div className="chartBodyV15 donut"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={onlinePie} dataKey="value" nameKey="name" innerRadius={68} outerRadius={100} paddingAngle={4}>{onlinePie.map((_,i)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}</Pie><Tooltip contentStyle={{background:'var(--card)',border:'1px solid var(--line)',borderRadius:14,color:'var(--text)'}}/><Legend verticalAlign="bottom"/></PieChart></ResponsiveContainer><div className="donutCenterV15"><b>{fa(stats.online)}</b><span>آنلاین کامل</span></div></div></article>
+        <article className="chartCardV15 wide"><div className="chartHeadV15"><div><span>پوشش Provider</span><h3>تعداد و آنلاین کامل به تفکیک Provider</h3></div></div><div className="chartBodyV15"><ResponsiveContainer width="100%" height="100%"><BarChart data={providerChart}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--line)"/><XAxis dataKey="name" tick={{fill:'var(--muted)',fontSize:10}} axisLine={false} tickLine={false}/><YAxis tick={{fill:'var(--muted)',fontSize:10}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{background:'var(--card)',border:'1px solid var(--line)',borderRadius:14,color:'var(--text)'}}/><Legend/><Bar dataKey="count" name="کل هتل" fill="#2563eb" radius={[7,7,0,0]}/><Bar dataKey="online" name="۱۰۰٪ آنلاین" fill="#14b8a6" radius={[7,7,0,0]}/></BarChart></ResponsiveContainer></div></article>
+      </section>
+      <section className="hotelActionGridV15"><article><Sparkles/><div><span>پیشنهاد عملیاتی</span><h3>{stats.migrate?`${fa(stats.migrate)} هتل برای مهاجرت Provider در اولویت هستند.`:'همه Providerهای فعال در وضعیت مناسب قرار دارند.'}</h3><button onClick={()=>setTab('migration')}>مشاهده پیشنهادها <ArrowLeft/></button></div></article><article><Users2/><div><span>بار کاری کارشناسان</span><h3>{experts.length?`${experts[0].expert_name} با ${fa(experts[0].total_hotels)} هتل بیشترین بار را دارد.`:'فایل کارشناسان هنوز وارد نشده است.'}</h3><button onClick={()=>setTab('experts')}>تحلیل کارشناسان <ArrowLeft/></button></div></article></section>
+    </>}
+
+    {['hotels','fullyOnline','migration'].includes(tab)&&<section className="hotelListV15">
+      <div className="hotelFilterBarV15"><div className="searchV15"><Search/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="نام هتل، کد، شهر یا Provider..."/></div><select value={scope} onChange={e=>setScope(e.target.value as any)}><option value="sellable">فقط هتل‌های در حال همکاری</option><option value="all">تمام دیتابیس</option></select><select value={provider} onChange={e=>setProvider(e.target.value)}>{providers.map(x=><option key={x} value={x}>{x==='all'?'همه Providerها':x}</option>)}</select><select value={city} onChange={e=>setCity(e.target.value)}>{cities.slice(0,300).map(x=><option key={x} value={x}>{x==='all'?'همه شهرها':x}</option>)}</select><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">همه وضعیت‌ها</option>{['۱۰۰٪ آنلاین','ظرفیت آنلاین','نرخ آنلاین','کارشناس‌محور','آفلاین','نیازمند مهاجرت Provider'].map(x=><option key={x}>{x}</option>)}</select><span>{fa(filtered.length)} نتیجه</span></div>
+      <div className="hotelTableV15"><div className="hotelTableHeadV15"><span>هتل</span><span>Provider</span><span>منبع نرخ</span><span>منبع ظرفیت</span><span>وضعیت</span><span>عملیات</span></div>{rows.map(r=><article key={r.id} onClick={()=>setSelected(r)}><div className="hotelIdentityV15"><span>{r.title.slice(0,1)}</span><div><b>{r.title}</b><small>{r.hotel_code||'بدون کد'} · {r.city||'بدون شهر'} · {r.grade||'بدون درجه'}</small></div></div><div><b>{r.provider}</b><small>{r.pms||'بدون PMS'}</small></div><SourceBadge api={r.rate_api} hotel={r.hotel_rate} expert={r.rate_expert}/><SourceBadge api={r.capacity_api} hotel={r.hotel_capacity} expert={r.capacity_expert}/><StatusBadge status={r.automation_status||'آفلاین'} score={r.automation_score||0}/><div className="hotelRowActionsV15"><button title="ایجاد تسک" onClick={e=>{e.stopPropagation();onCreateTask?.(r)}}><Plus/></button><button title="مشاهده پرونده" onClick={e=>{e.stopPropagation();setSelected(r)}}><Hotel/></button>{isSuperAdmin&&<button className="danger" title="حذف هتل" onClick={e=>{e.stopPropagation();void deleteHotel(r)}}><Trash2/></button>}</div></article>)}</div>
+      {!rows.length&&!busy&&<div className="emptyV15"><Hotel/><h3>هتلی مطابق فیلتر پیدا نشد</h3><p>فیلترها را پاک کن یا فایل اصلی هتل‌ها را دوباره وارد کن.</p></div>}
+      <div className="paginationV15"><button disabled={page<=1} onClick={()=>setPage(page-1)}><ChevronRight/></button><span>صفحه {fa(page)} از {fa(pages)}</span><button disabled={page>=pages} onClick={()=>setPage(page+1)}><ChevronLeft/></button></div>
+    </section>}
+
+    {tab==='experts'&&<section className="expertsV15"><div className="pageIntroV15"><div><h2>تحلیل بار کاری کارشناسان IHO Provider</h2><p>تعداد هتل‌هایی که ثبت نرخ یا ظرفیت آن‌ها به‌عهده هر کارشناس است.</p></div></div><div className="expertGridV15">{experts.map((e,i)=><article key={e.expert_name}><span className="rankV15">{i+1}</span><div className="expertAvatarV15">{e.expert_name.slice(0,1)}</div><h3>{e.expert_name}</h3><div><span>نرخ <b>{fa(e.rate_hotels)}</b></span><span>ظرفیت <b>{fa(e.capacity_hotels)}</b></span><span>کل یکتا <b>{fa(e.total_hotels)}</b></span></div></article>)}</div>{!experts.length&&<div className="emptyV15"><Users2/><h3>داده کارشناس وجود ندارد</h3><p>فایل تخصیص کارشناسان را از دکمه ورود اطلاعات وارد کن.</p></div>}</section>}
+
+    {tab==='providers'&&<section className="providersV15"><div className="pageIntroV15"><div><h2>تحلیل Providerها</h2><p>پوشش نرخ و ظرفیت، تعداد هتل و سهم آنلاین کامل هر Provider</p></div></div><div className="providerGridV15">{providerStats.map(p=>{const rule=rules.find(r=>norm(r.name)===norm(p.name));const pct=Math.round(p.online/Math.max(1,p.count)*100);return <article key={p.name}><div className="providerTopV15"><div><span>{p.name.slice(0,2).toUpperCase()}</span><div><h3>{p.name}</h3><small>{fa(p.count)} هتل</small></div></div><b>{pct}٪</b></div><div className="providerMeterV15"><i style={{width:`${pct}%`}}/></div><div className="providerCapabilitiesV15"><span className={rule?.rateApi?'on':''}>API نرخ</span><span className={rule?.capacityApi?'on':''}>API ظرفیت</span><span className={rule?.active?'on':''}>فعال</span></div><footer><span>آنلاین کامل {fa(p.online)}</span><span>آفلاین/دستی {fa(p.offline)}</span></footer></article>})}</div></section>}
+
+    {tab==='settings'&&<section className="providerSettingsV15"><div className="pageIntroV15"><div><h2>تنظیمات آنلاین‌سازی Provider</h2><p>قابلیت API نرخ و ظرفیت، تاریخ فعال‌سازی و Provider جایگزین را مدیریت کن.</p></div></div><div className="providerRuleTableV15"><div className="providerRuleHeadV15"><span>Provider</span><span>API نرخ</span><span>API ظرفیت</span><span>فعال</span><span>تاریخ شروع</span><span>جایگزین</span><span/></div>{rules.map(rule=><ProviderRuleRow key={rule.name} rule={rule} save={saveRule}/>)}</div></section>}
+
+    {tab==='governance'&&isSuperAdmin&&<section className="governanceV15"><div className="governanceHeroV15"><LockKeyhole/><div><h2>مدیریت و پاک‌سازی داده</h2><p>حذف کامل فقط با رمز سوپر ادمین انجام می‌شود. حذف هتل تکی قبل از حذف در سطل بازیافت ذخیره می‌شود.</p></div></div><div className="dangerGridV15">{[['ihos_hotels','پرونده تمام هتل‌ها','اطلاعات اصلی و اتصال‌های آنلاین‌سازی'],['ihos_hotel_automation','اطلاعات نرخ، ظرفیت و کارشناسان','وضعیت عملیاتی IHO Provider'],['ihos_provider_rules','تنظیمات Providerها','قواعد API و پیشنهاد مهاجرت']].map(([t,l,d])=><article key={t}><Trash2/><div><h3>{l}</h3><p>{d}</p></div><button onClick={()=>clearTable(t,l)}>پاک‌سازی کامل</button></article>)}</div></section>}
+
+    {selected&&<div className="drawerBackdropV15" onClick={()=>setSelected(null)}><aside className="hotelDrawerV15" onClick={e=>e.stopPropagation()}><header><div className="hotelDrawerAvatarV15">{selected.title.slice(0,1)}</div><div><span>پرونده آنلاین‌سازی</span><h2>{selected.title}</h2><p>{selected.hotel_code||'بدون کد'} · {selected.city||'بدون شهر'} · {selected.provider}</p></div><button onClick={()=>setSelected(null)}><X/></button></header><section className="drawerScoreV15"><div className="gaugeRingV15 mini" style={{'--value':`${(selected.automation_score||0)*3.6}deg`} as any}><strong>{selected.automation_score||0}٪</strong><span>امتیاز آنلاین</span></div><StatusBadge status={selected.automation_status||'آفلاین'} score={selected.automation_score||0}/></section><section className="drawerSourcesV15"><SourceCard title="منبع نرخ" api={selected.rate_api} hotel={selected.hotel_rate} expert={selected.rate_expert}/><SourceCard title="منبع ظرفیت" api={selected.capacity_api} hotel={selected.hotel_capacity} expert={selected.capacity_expert}/></section>{selected.migration_needed&&<section className="migrationCalloutV15"><Sparkles/><div><span>پیشنهاد مهاجرت</span><h3>انتقال به {selected.replacement_provider||'Provider دارای API کامل'}</h3><p>برای کاهش وابستگی به کارشناس و افزایش آنلاین‌بودن نرخ و ظرفیت.</p></div></section>}<footer><button className="btn primary" onClick={()=>onCreateTask?.(selected)}><Plus/> ایجاد تسک برای هتل</button>{isSuperAdmin&&<button className="btn danger" onClick={()=>deleteHotel(selected)}><Trash2/> حذف هتل</button>}</footer></aside></div>}
+  </div>
 }
-function SourceBadge({api,hotel,expert,online}:{api?:boolean;hotel?:boolean;expert?:string;online?:boolean}){return <div className={`sourceBadge ${online?'online':expert?'expert':'offline'}`}>{api?'Provider API':hotel?'هتل':expert?`کارشناس: ${expert}`:'آفلاین'}</div>}
-function HotelDrawer({row,close,createTask}:{row:Row;close:()=>void;createTask:()=>void}){return <div className="drawerBackdrop" onClick={close}><aside className="hotelDrawer" onClick={e=>e.stopPropagation()}><button className="drawerClose" onClick={close}><X/></button><header><div className="drawerAvatar">{row.title?.slice(0,1)}</div><div><span className="eyebrow">HOTEL ONLINE PROFILE</span><h2>{row.title}</h2><p><MapPin size={15}/>{row.city||'—'}، {row.province||'—'}</p></div></header><button className="btn primary" onClick={createTask}><Plus size={16}/> ایجاد تسک برای این هتل</button><div className="drawerKpis"><div><Activity/><b>{row.automation_score||0}٪</b><span>آنلاین‌سازی</span></div><div><Building2/><b>{row.provider||'IHO Provider'}</b><span>Provider</span></div><div><CheckCircle2/><b>{row.automation_status||'—'}</b><span>وضعیت</span></div></div><section><h3>منبع نرخ و ظرفیت</h3><div className="connectionMap"><div><span>نرخ</span><SourceBadge api={row.rate_api} hotel={row.hotel_rate} expert={row.rate_expert} online={row.rate_online}/></div><i/><div><span>ظرفیت</span><SourceBadge api={row.capacity_api} hotel={row.hotel_capacity} expert={row.capacity_expert} online={row.capacity_online}/></div></div></section><section><h3>کارشناسان مرتبط</h3><dl><div><dt>کارشناس نرخ</dt><dd>{row.rate_expert||'هتل / Provider'}</dd></div><div><dt>کارشناس ظرفیت</dt><dd>{row.capacity_expert||'هتل / Provider'}</dd></div></dl></section>{row.migration_needed&&<section className="recommendation"><ShieldAlert/><div><b>پیشنهاد مهاجرت Provider</b><p>انتقال از {row.provider} به {row.replacement_provider||'Provider دارای API نرخ و ظرفیت'}.</p></div></section>}</aside></div>}
+
+function Metric({title,value,icon:Icon,tone,hint}:any){return <article className={`hotelMetricV15 ${tone}`}><span><Icon/></span><div><small>{title}</small><strong>{fa(value)}</strong><p>{hint}</p></div></article>}
+function SourceBadge({api,hotel,expert}:any){const label=api?'Provider API':hotel?'پنل هتل':expert?expert:'آفلاین';return <span className={`sourceBadgeV15 ${api?'api':hotel?'hotel':expert?'expert':'offline'}`}><i/>{label}</span>}
+function SourceCard({title,api,hotel,expert}:any){return <article><span>{title}</span><SourceBadge api={api} hotel={hotel} expert={expert}/><small>{api?'بدون دخالت کارشناس':hotel?'هتل اطلاعات را ثبت می‌کند':expert?`مسئول: ${expert}`:'هیچ منبع فعالی ثبت نشده'}</small></article>}
+function StatusBadge({status,score}:any){return <span className={`statusBadgeV15 ${status.includes('۱۰۰')?'online':status.includes('ظرفیت')?'capacity':status.includes('نرخ')?'rate':status.includes('مهاجرت')?'migrate':status.includes('کارشناس')?'expert':'offline'}`}><i/>{status}<small>{score}٪</small></span>}
+function ProviderRuleRow({rule,save}:any){const [r,setR]=useState(rule);useEffect(()=>setR(rule),[rule]);return <div className="providerRuleRowV15"><b>{r.name}</b><label className="switchV15"><input type="checkbox" checked={r.rateApi} onChange={e=>setR({...r,rateApi:e.target.checked})}/><i/></label><label className="switchV15"><input type="checkbox" checked={r.capacityApi} onChange={e=>setR({...r,capacityApi:e.target.checked})}/><i/></label><label className="switchV15"><input type="checkbox" checked={r.active} onChange={e=>setR({...r,active:e.target.checked})}/><i/></label><input type="date" value={r.effectiveFrom||''} onChange={e=>setR({...r,effectiveFrom:e.target.value})}/><input value={r.replacementProvider||''} onChange={e=>setR({...r,replacementProvider:e.target.value})} placeholder="Provider جایگزین"/><button onClick={()=>save(r)}><Save/></button></div>}
