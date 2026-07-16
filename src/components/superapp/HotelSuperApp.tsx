@@ -17,9 +17,9 @@ const yes=(v:any)=>['1','true','yes','بله','فعال','online','بلی'].incl
 const num=(v:any)=>{const n=Number(String(v??'').replace(/,/g,''));return Number.isFinite(n)?n:0};
 async function rowsFromFile(file:File){const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)throw new Error('شیت قابل خواندن پیدا نشد');const rows=XLSX.utils.sheet_to_json(ws,{defval:null,raw:false}) as any[];if(!rows.length)throw new Error('فایل خالی است');return rows}
 
-export default function HotelSuperApp({isSuperAdmin=false,actor,onCreateTask}:{isSuperAdmin?:boolean;actor?:{id?:string;username?:string;name?:string};onCreateTask?:(row:Row)=>void}){
+export default function HotelSuperApp({isSuperAdmin=false,actor,onCreateTask,initialTab='overview'}:{isSuperAdmin?:boolean;actor?:{id?:string;username?:string;name?:string};onCreateTask?:(row:Row)=>void;initialTab?:string}){
  const [rows,setRows]=useState<Row[]>([]),[rules,setRules]=useState<ProviderRule[]>(DEFAULT_PROVIDER_RULES),[stats,setStats]=useState<Stats>(emptyStats),[experts,setExperts]=useState<ExpertRow[]>([]);
- const [tab,setTab]=useState('overview'),[q,setQ]=useState(''),[provider,setProvider]=useState('all'),[status,setStatus]=useState('all');
+ const [tab,setTab]=useState(initialTab),[q,setQ]=useState(''),[provider,setProvider]=useState('all'),[status,setStatus]=useState('all');
  const [page,setPage]=useState(1),[total,setTotal]=useState(0),[busy,setBusy]=useState(false),[msg,setMsg]=useState(''),[selected,setSelected]=useState<Row|null>(null);
  const debounce=useRef<any>(null); const pageSize=40;
  useEffect(()=>{void loadRules();void loadStats();void loadExperts()},[]);
@@ -27,7 +27,64 @@ export default function HotelSuperApp({isSuperAdmin=false,actor,onCreateTask}:{i
  async function loadRules(){const db=getSupabase();if(!db)return;const {data}=await db.from('ihos_provider_rules').select('*').order('priority');if(data?.length)setRules(data.map((x:any)=>({name:x.name,rateApi:x.rate_api,capacityApi:x.capacity_api,active:x.active,effectiveFrom:x.effective_from,replacementProvider:x.replacement_provider,priority:x.priority})))}
  async function loadStats(){const db=getSupabase();if(!db)return;const [{count},{data,error}]=await Promise.all([db.from('ihos_hotels').select('id',{count:'exact',head:true}),db.rpc('ihos_hotel_dashboard_stats')]);const analytic=(!error&&data?data:{}) as Partial<Stats>;setStats({...emptyStats,...analytic,all:count||0})}
  async function loadExperts(){const db=getSupabase();if(!db)return;const {data,error}=await db.from('ihos_expert_workload_v').select('*').order('total_hotels',{ascending:false});if(!error)setExperts((data||[]) as ExpertRow[])}
- async function loadPage(){const db=getSupabase();if(!db){setMsg('Supabase تنظیم نشده است');return}setBusy(true);try{let query:any=db.from('ihos_hotel_status_v').select('*',{count:'exact'});if(provider!=='all')query=query.eq('provider',provider);if(status!=='all')query=query.eq('automation_status',status);if(tab==='migration')query=query.eq('migration_needed',true);if(tab==='fullyOnline')query=query.eq('automation_status','۱۰۰٪ آنلاین');if(q.trim()){const s=q.trim().replace(/[%_,]/g,' ');query=query.or(`title.ilike.%${s}%,hotel_code.ilike.%${s}%,city.ilike.%${s}%,province.ilike.%${s}%,rate_expert.ilike.%${s}%,capacity_expert.ilike.%${s}%`)}const from=(page-1)*pageSize;const {data,error,count}=await query.order('title',{ascending:true}).range(from,from+pageSize-1);if(error)throw error;setRows((data||[]) as Row[]);setTotal(count||0);setMsg(`${(count||0).toLocaleString('fa-IR')} نتیجه`)}catch(e:any){setMsg(`خطای دریافت: ${e.message}`)}finally{setBusy(false)}}
+ async function loadPage(){
+  const db=getSupabase();if(!db){setMsg('Supabase تنظیم نشده است');return}
+  setBusy(true);
+  try{
+    // The hotel file is the source of truth. Query it directly so every imported hotel appears,
+    // even when analytical views or automation rows have not been created yet.
+    let base:any=db.from('ihos_hotels').select('*',{count:'exact'});
+    if(provider!=='all')base=base.eq('provider',provider);
+    if(q.trim()){
+      const search=q.trim().replace(/[%_,]/g,' ');
+      base=base.or(`title.ilike.%${search}%,hotel_code.ilike.%${search}%,city.ilike.%${search}%,province.ilike.%${search}%`);
+    }
+    const from=(page-1)*pageSize;
+    const {data:hotelData,error:hotelError,count}=await base.order('title',{ascending:true}).range(from,from+pageSize-1);
+    if(hotelError)throw hotelError;
+    const hotels=(hotelData||[]) as any[];
+    const ids=hotels.map(h=>h.id).filter(Boolean);
+    let automation:any[]=[];
+    if(ids.length){
+      const {data,error}=await db.from('ihos_hotel_automation').select('*').in('hotel_id',ids);
+      if(error)throw error;automation=data||[];
+    }
+    const byHotel=new Map(automation.map(a=>[a.hotel_id,a]));
+    const today=new Date().toISOString().slice(0,10);
+    const ruleFor=(name:string)=>rules.find(r=>norm(r.name)===norm(name));
+    let enriched:Row[]=hotels.map(h=>{
+      const a=byHotel.get(h.id)||{};
+      const providerName=String(a.provider||h.provider||'IHO Provider').trim()||'IHO Provider';
+      const rule=ruleFor(providerName);
+      const effective=!rule?.effectiveFrom||rule.effectiveFrom<=today;
+      const rateApi=!!(rule?.active&&effective&&rule.rateApi);
+      const capacityApi=!!(rule?.active&&effective&&rule.capacityApi);
+      const rateExpert=String(a.rate_expert||'').trim()||undefined;
+      const capacityExpert=String(a.capacity_expert||'').trim()||undefined;
+      const hotelRate=!!a.hotel_rate;
+      const hotelCapacity=!!a.hotel_capacity;
+      const rateOnline=rateApi||(!rateExpert&&hotelRate);
+      const capacityOnline=capacityApi||(!capacityExpert&&hotelCapacity);
+      const score=(rateOnline?50:rateExpert?25:0)+(capacityOnline?50:capacityExpert?35:0);
+      const badProvider=['iho','asa','shab'].includes(norm(providerName));
+      const migrationNeeded=badProvider||(!(rateOnline&&capacityOnline)&&!!rule?.replacementProvider);
+      let automationStatus='آفلاین';
+      if(rateOnline&&capacityOnline)automationStatus='۱۰۰٪ آنلاین';
+      else if(badProvider)automationStatus='نیازمند مهاجرت Provider';
+      else if(capacityOnline)automationStatus='ظرفیت آنلاین';
+      else if(rateOnline)automationStatus='نرخ آنلاین';
+      else if(rateExpert||capacityExpert)automationStatus='کارشناس‌محور';
+      return {...h,provider:providerName,hotel_rate:hotelRate,hotel_capacity:hotelCapacity,rate_expert:rateExpert,capacity_expert:capacityExpert,rate_api:rateApi,capacity_api:capacityApi,rate_online:rateOnline,capacity_online:capacityOnline,automation_score:score,automation_status:automationStatus,migration_needed:migrationNeeded,replacement_provider:rule?.replacementProvider} as Row;
+    });
+    if(status!=='all')enriched=enriched.filter(r=>r.automation_status===status);
+    if(tab==='migration')enriched=enriched.filter(r=>r.migration_needed);
+    if(tab==='fullyOnline')enriched=enriched.filter(r=>r.automation_status==='۱۰۰٪ آنلاین');
+    setRows(enriched);
+    // Count always comes from the master imported table. It is not derived from a view.
+    setTotal(count||0);
+    setMsg(`${(count||0).toLocaleString('fa-IR')} هتل در دیتابیس اصلی`);
+  }catch(e:any){setMsg(`خطای دریافت: ${e.message}`)}finally{setBusy(false)}
+ }
  async function refresh(){await Promise.all([loadStats(),loadPage(),loadRules(),loadExperts()])}
  async function importHotels(file:File){setBusy(true);setMsg('در حال پردازش فایل هتل‌ها...');try{const data=await rowsFromFile(file);const now=Date.now();const mapped=data.map((r,i)=>{const code=text(r,['کد هتل','hotel_code','HotelCode','کدهتل']);return {id:code?`hotel-${code}`:`hotel-import-${now}-${i}`,hotel_code:code,title:text(r,['نام هتل','title','HotelName','نام']),country:text(r,['کشور']),province:text(r,['استان','province']),city:text(r,['شهر','city']),hotel_group:text(r,['گروه نوع هتل']),caring_category:text(r,['CaringCategory','caring_category']),hotel_type:text(r,['نوع هتل']),phone:text(r,['تلفن هتل']),reservation_phone:text(r,['تلفن رزرواسیون','تلن رزرواسیون']),capacity_total:num(val(r,['تعداد تخت','ظرفیت کلی هتل','ظرفیت','capacity_total'])),provider:text(r,['نام پروایدر','provider','Provider'])||'IHO Provider',pms:text(r,['PMS']),cooperation_status:text(r,['وضعیت همکاری','cooperation_status']),risk_status:text(r,['وضعیت ریسکی']),hotel_category:text(r,['دسته بندی هتل']),grade:text(r,['درجه هتل']),purchase_period:num(val(r,['دوره خرید'])),payment_period:num(val(r,['دوره پرداخت'])),status_end_date:text(r,['تاریخ پایان وضعیت']),status_start_date:text(r,['تاریخ شروع وضعیت']),contract_date:text(r,['تاریخ قرارداد']),site_visible:yes(val(r,['نمایش در سایت','site_visible'])),search_visible:yes(val(r,['نمایش در نتایج جستجو','search_visible']))}}).filter(x=>x.title&&x.hotel_code);if(!mapped.length)throw new Error('ستون نام هتل یا کد هتل شناسایی نشد');await upsertChunks('ihos_hotels',mapped,300);setMsg(`✅ ${mapped.length.toLocaleString('fa-IR')} هتل ذخیره شد`);setPage(1);await refresh()}catch(e:any){setMsg(`❌ ${e.message}`)}finally{setBusy(false)}}
  async function importExperts(file:File){setBusy(true);setMsg('در حال تطبیق کارشناسان نرخ و ظرفیت...');try{const data=await rowsFromFile(file);const db=getSupabase();if(!db)throw new Error('Supabase تنظیم نشده');const all:any[]=[];for(let from=0;;from+=1000){const {data:h,error}=await db.from('ihos_hotels').select('id,hotel_code,title,provider').range(from,from+999);if(error)throw error;all.push(...(h||[]));if(!h||h.length<1000)break}const byCode=new Map(all.filter(x=>x.hotel_code).map(x=>[norm(x.hotel_code),x]));const byName=new Map<string,any[]>();all.forEach(h=>byName.set(norm(h.title),[...(byName.get(norm(h.title))||[]),h]));const patch=new Map<string,any>();let matched=0,unmatched=0;for(const r of data){const code=text(r,['کد هتل','hotel_code','HotelCode']);const hotelName=text(r,['نام هتل','HotelName','hotel_name']);const task=Number(val(r,['taskId','task id','task_id','TaskId']));const name=text(r,['First name','نام','کارشناس','expert_name','full_name']);if(!name||![1,2].includes(task))continue;let h=code?byCode.get(norm(code)):undefined;if(!h&&hotelName){const c=byName.get(norm(hotelName))||[];if(c.length===1)h=c[0]}if(!h){unmatched++;continue}const old=patch.get(h.id)||{id:h.id,hotel_id:h.id,hotel_code:h.hotel_code,provider:h.provider||'IHO Provider',hotel_rate:false,hotel_capacity:false,updated_at:new Date().toISOString()};if(task===1)old.capacity_expert=name;else old.rate_expert=name;patch.set(h.id,old);matched++}await upsertChunks('ihos_hotel_automation',[...patch.values()],300);setMsg(`✅ ${matched.toLocaleString('fa-IR')} تخصیص ثبت شد؛ ${unmatched.toLocaleString('fa-IR')} مورد تطبیق نشد`);await refresh()}catch(e:any){setMsg(`❌ ${e.message}`)}finally{setBusy(false)}}

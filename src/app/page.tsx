@@ -254,7 +254,27 @@ function IHOSApp(){
   function browserNotify(title:string,body:string){if(!settings.notifications || typeof Notification==='undefined')return;if(Notification.permission==='granted') new Notification(title,{body,icon:settings.faviconUrl||settings.logoUrl||undefined});}
   async function requestNotifications(){if(typeof Notification==='undefined'){toast('مرورگر از Notification پشتیبانی نمی‌کند');return}const p=await Notification.requestPermission();toast(p==='granted'?'نوتیفیکیشن مرورگر فعال شد':'دسترسی نوتیفیکیشن داده نشد')}
   async function uploadFile(file:File,folder:string){const db=await getSupabaseClient();if(!db)return URL.createObjectURL(file);const path=`${folder}/${Date.now()}-${file.name.replace(/\s+/g,'-')}`;const {error}=await db.storage.from('ihos-documents').upload(path,file,{upsert:true});if(error){toast('خطای آپلود: '+error.message);return URL.createObjectURL(file)}const {data}=db.storage.from('ihos-documents').getPublicUrl(path);return data.publicUrl}
-  async function remove(table:string,id:string,local:()=>void){if(!isSuperAdmin){toast('فقط سوپر ادمین مجاز به حذف اطلاعات است');return}const key=prompt('رمز حذف سوپر ادمین را وارد کنید');if(!key)return;if(!confirm('این رکورد حذف و در سطل بازیافت ثبت شود؟'))return;setBusy(true);try{const res=await fetch('/api/admin/delete',{method:'DELETE',headers:{'Content-Type':'application/json','x-delete-key':key},body:JSON.stringify({action:'delete-row',table,id,actor:{id:me?.id,username:me?.username,name:me?.full_name}})});const out=await res.json();if(!res.ok)throw new Error(out.error||'حذف ناموفق بود');local();await log('delete',table,id,'حذف رکورد توسط سوپر ادمین');toast('حذف شد و در سطل بازیافت ثبت شد')}catch(e:any){alert(e.message)}finally{setBusy(false)}}
+  async function remove(table:string,id:string,local:()=>void){
+    // Only the master hotel database is protected by super-admin deletion rules.
+    // Operational records such as reminders, tasks, events and documents follow their normal module permissions.
+    const protectedTables=new Set(['ihos_hotels','ihos_hotel_automation','ihos_provider_rules']);
+    if(protectedTables.has(table)){
+      if(!isSuperAdmin){toast('حذف از دیتابیس اصلی فقط برای سوپر ادمین مجاز است');return}
+      if(!confirm('این رکورد از دیتابیس اصلی حذف و در سطل بازیافت ثبت شود؟'))return;
+      setBusy(true);
+      try{
+        const res=await fetch('/api/admin/delete',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete-row',table,id,actor:{id:me?.id,username:me?.username,name:me?.full_name,isSuperAdmin:true}})});
+        const out=await res.json();
+        if(!res.ok)throw new Error(out.error||'حذف ناموفق بود');
+        local();await log('delete',table,id,'حذف رکورد دیتابیس اصلی توسط سوپر ادمین');toast('حذف شد و در سطل بازیافت ثبت شد');
+      }catch(e:any){alert(e.message)}finally{setBusy(false)}
+      return;
+    }
+    if(!confirm('این مورد حذف شود؟'))return;
+    setBusy(true);
+    try{await dbDelete(table,id);local();await log('delete',table,id,'حذف رکورد عملیاتی');toast('حذف شد')}
+    catch(e:any){alert(e.message)}finally{setBusy(false)}
+  }
 
   async function saveTask(task:Task, acts?:TaskActivity[], reminder?:Partial<Reminder>){
     if(!can(task.id && tasks.some(t=>t.id===task.id)?'tasks_edit':'tasks_create')) return toast('دسترسی کافی نداری');
@@ -299,7 +319,7 @@ function IHOSApp(){
         {view==='playbooks'&&can('playbooks')&&<OpsModule kind='playbooks' me={me} tasks={visibleTasks} hotels={hotels} users={users} logs={logs} reminders={reminders} activities={activities} saveTask={saveTask} openTask={(t:Task)=>openModal('task',t)} setView={setView}/>}
         {view==='messages'&&can('messages')&&<OpsModule kind='messages' me={me} tasks={visibleTasks} hotels={hotels} users={users} logs={logs} reminders={reminders} activities={activities} saveTask={saveTask} openTask={(t:Task)=>openModal('task',t)} setView={setView}/>}
         {view==='tasks'&&can('tasks')&&<Tasks tasks={filteredTasks} users={users} statuses={statuses} activities={activities} can={can} saveTask={(t:Task)=>saveTask(t)} edit={(t:Task)=>openModal('task',t)} remove={(id:string)=>remove('ihos_tasks',id,()=>setTasks(tasks.filter(t=>t.id!==id)))} openDetails={(t:Task)=>openModal('task',t)}/>} 
-        {view==='hotels'&&can('hotels')&&<Hotels hotels={hotels.filter(h=>(h.title+(h.city||'')+(h.province||'')+(h.hotel_code||'')).includes(q))} tasks={tasks} can={can} edit={(h:any)=>openModal('hotel',h)} profile={(h:any)=>openModal('hotelProfile',h)} remove={(id:string)=>remove('ihos_hotels',id,()=>setHotels(hotels.filter(h=>h.id!==id)))} importExcel={()=>openModal('importHotels')}/>} 
+        {view==='hotels'&&can('hotels')&&<HotelSuperApp initialTab="hotels" isSuperAdmin={isSuperAdmin} actor={{id:me.id,username:me.username,name:me.full_name}} onCreateTask={(h:any)=>{setEditing({id:uid(),title:`پیگیری ${h.title}`,hotel_id:h.id,hotel_title:h.title,city:h.city,priority:'متوسط',status:settings.defaultTaskStatus,category:'پیگیری',deadline:today(),due_time:'12:00',labels:['هتل'],collaborator_ids:[],created_at:nowIso()});setModal('task')}}/>} 
         {view==='contracts'&&can('contracts')&&<OpsModule kind='contracts' me={me} tasks={visibleTasks} hotels={hotels} users={users} logs={logs} reminders={reminders} activities={activities} saveTask={saveTask} openTask={(t:Task)=>openModal('task',t)} setView={setView}/>}
         {view==='communications'&&can('communications')&&<OpsModule kind='communications' me={me} tasks={visibleTasks} hotels={hotels} users={users} logs={logs} reminders={reminders} activities={activities} saveTask={saveTask} openTask={(t:Task)=>openModal('task',t)} setView={setView}/>}
         {view==='calendar'&&can('calendar')&&<CalendarView tasks={visibleTasks} events={events} reminders={reminders} add={()=>openModal('event')} edit={(e:EventT)=>openModal('event',e)} remove={(id:string)=>remove('ihos_calendar_events',id,()=>setEvents(events.filter(e=>e.id!==id)))}/>} 
