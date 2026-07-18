@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx';
 import {DEFAULT_PROVIDER_RULES} from '@/lib/superapp/automation';
 import type {ProviderRule} from '@/lib/superapp/types';
 import {getSupabase,upsertChunks} from '@/lib/superapp/supabase';
+import {ProviderCoverageCenter} from '@/components/enterprise/V17Modules';
 
 type Row={
   id:string;hotel_code?:string;title:string;city?:string;province?:string;caring_category?:string;
@@ -187,7 +188,7 @@ export default function HotelSuperApp({isSuperAdmin=false,actor,onCreateTask,ini
 
   const onlinePie=[{name:'۱۰۰٪ آنلاین',value:stats.online},{name:'ظرفیت آنلاین',value:stats.capacity},{name:'نرخ آنلاین',value:stats.rate},{name:'کارشناس‌محور',value:stats.expert},{name:'آفلاین',value:stats.offline}].filter(x=>x.value>0);
   const providerChart=providerStats.slice(0,8).map(x=>({name:x.name,count:x.count,online:x.online}));
-  const tabs=[['overview','نمای مدیریتی',BarChart3],['hotels','پرونده هتل‌ها',Hotel],['fullyOnline','۱۰۰٪ آنلاین',CheckCircle2],['migration','پیشنهاد مهاجرت',TrendingUp],['experts','تحلیل کارشناسان',Users2],['providers','Providerها',Database],['settings','تنظیم آنلاین‌سازی',Settings2],...(isSuperAdmin?[['governance','مدیریت داده',LockKeyhole]]:[])] as any[];
+  const tabs=[['overview','نمای مدیریتی',BarChart3],['hotels','پرونده هتل‌ها',Hotel],['fullyOnline','۱۰۰٪ آنلاین',CheckCircle2],['migration','پیشنهاد مهاجرت',TrendingUp],['experts','تحلیل کارشناسان',Users2],['providers','Providerها',Database],['coverage','پوشش Providerها',CloudUpload],['settings','تنظیم آنلاین‌سازی',Settings2],...(isSuperAdmin?[['governance','مدیریت داده',LockKeyhole]]:[])] as any[];
 
   return <div className="hotelOsV15">
     <header className="hotelOsHeaderV15">
@@ -221,6 +222,8 @@ export default function HotelSuperApp({isSuperAdmin=false,actor,onCreateTask,ini
     </section>}
 
     {tab==='experts'&&<section className="expertsV15"><div className="pageIntroV15"><div><h2>تحلیل بار کاری کارشناسان IHO Provider</h2><p>تعداد هتل‌هایی که ثبت نرخ یا ظرفیت آن‌ها به‌عهده هر کارشناس است.</p></div></div><div className="expertGridV15">{experts.map((e,i)=><article key={e.expert_name}><span className="rankV15">{i+1}</span><div className="expertAvatarV15">{e.expert_name.slice(0,1)}</div><h3>{e.expert_name}</h3><div><span>نرخ <b>{fa(e.rate_hotels)}</b></span><span>ظرفیت <b>{fa(e.capacity_hotels)}</b></span><span>کل یکتا <b>{fa(e.total_hotels)}</b></span></div></article>)}</div>{!experts.length&&<div className="emptyV15"><Users2/><h3>داده کارشناس وجود ندارد</h3><p>فایل تخصیص کارشناسان را از دکمه ورود اطلاعات وارد کن.</p></div>}</section>}
+
+    {tab==='coverage'&&<ProviderCoverageCenter master={master} rules={rules}/>}
 
     {tab==='providers'&&<section className="providersV15"><div className="pageIntroV15"><div><h2>تحلیل Providerها</h2><p>پوشش نرخ و ظرفیت، تعداد هتل و سهم آنلاین کامل هر Provider</p></div></div><div className="providerGridV15">{providerStats.map(p=>{const rule=rules.find(r=>norm(r.name)===norm(p.name));const pct=Math.round(p.online/Math.max(1,p.count)*100);return <article key={p.name}><div className="providerTopV15"><div><span>{p.name.slice(0,2).toUpperCase()}</span><div><h3>{p.name}</h3><small>{fa(p.count)} هتل</small></div></div><b>{pct}٪</b></div><div className="providerMeterV15"><i style={{width:`${pct}%`}}/></div><div className="providerCapabilitiesV15"><span className={rule?.rateApi?'on':''}>API نرخ</span><span className={rule?.capacityApi?'on':''}>API ظرفیت</span><span className={rule?.active?'on':''}>فعال</span></div><footer><span>آنلاین کامل {fa(p.online)}</span><span>آفلاین/دستی {fa(p.offline)}</span></footer></article>})}</div></section>}
 
