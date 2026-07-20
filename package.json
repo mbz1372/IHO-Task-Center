@@ -1,6 +1,6 @@
 {
   "name": "iranhotel-os-enterprise",
-  "version": "17.0.0",
+  "version": "18.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
