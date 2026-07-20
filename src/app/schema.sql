@@ -244,12 +244,8 @@ values
 ('u-3','فائزه سالاری','salari','123456','سیتی منیجر','role-city','مرکز','مرکز',true)
 on conflict (id) do nothing;
 
-insert into ihos_hotels (id,title,city,province,star,status,contract_status,provider,capacity_total,site_visible,search_visible)
-values
-('h-1','هتل درویشی','مشهد','خراسان رضوی',5,'فعال','فعال','IHO Provider',220,true,true),
-('h-2','هتل پارس','مشهد','خراسان رضوی',5,'فعال','نیازمند تمدید','IHO Provider',228,true,false),
-('h-3','هتل آریان کیش','کیش','هرمزگان',4,'فعال','فعال','IHO Provider',73,true,true)
-on conflict (id) do nothing;
+-- Hotel, task and activity rows are intentionally not seeded. Operational data
+-- must come from the production import or an explicit user action.
 
 insert into storage.buckets (id, name, public)
 values ('ihos-documents', 'ihos-documents', true)
