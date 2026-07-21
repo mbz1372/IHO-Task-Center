@@ -265,15 +265,8 @@ function IHOSApp(){
     let from=0;
     let all:any[]=[];
     while(true){
-      // The main Task Manager only needs a lightweight hotel sample. The full hotel dataset
-      // is queried with server-side pagination inside HotelSuperApp.
-      if(table==='ihos_hotels'){
-        const {data,error}=await db.from(table).select('*').order('title',{ascending:true}).range(0,299);
-        if(!error&&data) setter(data);
-        return;
-      }
       let query=db.from(table).select('*').range(from,from+pageSize-1);
-      query=query.order('created_at',{ascending:false});
+      query=table==='ihos_hotels'?query.order('title',{ascending:true}):query.order('created_at',{ascending:false});
       const {data,error}=await query;
       if(error){console.error(`Sync ${table} failed`,error);return}
       const batch=data||[];
@@ -345,6 +338,33 @@ function IHOSApp(){
     setModal('task');
   }
   async function saveUser(u:User){const exists=users.some(x=>x.id===u.id);const row={...u,updated_at:nowIso(),created_at:u.created_at||nowIso()};setUsers(exists?users.map(x=>x.id===u.id?row:x):[row,...users]);await dbUpsert('ihos_users',row);await log(exists?'update':'create','user',row.id,row.full_name);toast('کاربر ذخیره شد');setModal(null)}
+  async function importExperts(file:File){
+    const XLSX=await loadXLSX();
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const data=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false,blankrows:false}) as Record<string,any>[];
+    if(!data.length)throw new Error('فایل کارشناس‌ها خالی است');
+    const pick=(row:Record<string,any>,names:string[])=>{for(const [key,value] of Object.entries(row)){if(names.some(name=>norm(name)===norm(key))&&String(value??'').trim())return String(value).trim()}return ''};
+    const existingByUsername=new Map(users.map(u=>[norm(u.username),u]));
+    const existingByEmail=new Map(users.filter(u=>u.email).map(u=>[norm(u.email),u]));
+    const rows:User[]=data.map((raw,index)=>{
+      const fullName=pick(raw,['نام و نام خانوادگی','نام کارشناس','نام','full_name','name']);
+      const email=pick(raw,['ایمیل','email']);
+      const mobile=pick(raw,['موبایل','شماره موبایل','mobile','phone']);
+      const fallbackUsername=email.split('@')[0]||mobile.replace(/\D/g,'')||`expert-${index+1}`;
+      const username=pick(raw,['نام کاربری','username','user name'])||fallbackUsername;
+      const previous=existingByUsername.get(norm(username))||existingByEmail.get(norm(email));
+      const roleText=pick(raw,['نقش','سمت','role'])||'کارشناس';
+      const role=roles.find(r=>norm(r.title)===norm(roleText))||roles.find(r=>r.id==='role-expert');
+      if(!fullName)return null as any;
+      return {...previous,id:previous?.id||uid(),full_name:fullName,username,password_hash:pick(raw,['رمز عبور','password'])||previous?.password_hash||'123456',role:role?.title||roleText,role_id:role?.id||'role-expert',team:pick(raw,['تیم','team'])||previous?.team||'',zone:pick(raw,['منطقه','زون','استان','zone','region'])||previous?.zone||'',mobile:mobile||previous?.mobile||'',email:email||previous?.email||'',is_active:!['خیر','غیرفعال','false','0'].includes(norm(pick(raw,['فعال','وضعیت','active']))),created_at:previous?.created_at||nowIso(),updated_at:nowIso()};
+    }).filter(Boolean);
+    if(!rows.length)throw new Error('ستون نام کارشناس پیدا نشد');
+    const db=await getSupabaseClient();if(!db)throw new Error('اتصال Supabase در دسترس نیست');
+    for(let i=0;i<rows.length;i+=300){const {error}=await db.from('ihos_users').upsert(rows.slice(i,i+300),{onConflict:'id'});if(error)throw error}
+    setUsers(current=>{const map=new Map(current.map(u=>[u.id,u]));rows.forEach(u=>map.set(u.id,u));return [...map.values()]});
+    await log('import','user',undefined,`ورود گروهی ${rows.length} کارشناس`);toast(`${rows.length.toLocaleString('fa-IR')} کارشناس اعمال شد`);
+  }
   async function saveRole(r:Role){const exists=roles.some(x=>x.id===r.id);const row={...r,updated_at:nowIso(),created_at:r.created_at||nowIso()};setRoles(exists?roles.map(x=>x.id===r.id?row:x):[row,...roles]);await dbUpsert('ihos_roles',row);await log(exists?'update':'create','role',row.id,row.title);toast('نقش ذخیره شد');setModal(null)}
   async function saveHotel(h:HotelT){const exists=hotels.some(x=>x.id===h.id);const row={...h,updated_at:nowIso(),created_at:h.created_at||nowIso()};setHotels(exists?hotels.map(x=>x.id===h.id?row:x):[row,...hotels]);await dbUpsert('ihos_hotels',row);await log(exists?'update':'create','hotel',row.id,row.title);toast('هتل ذخیره شد');setModal(null)}
   async function saveGeneric<T extends {id:string}>(table:string,row:T,list:T[],setter:(v:T[])=>void,entity:string,title?:string){const exists=list.some((x:any)=>x.id===row.id);const final:any={...row,updated_at:nowIso(),created_at:(row as any).created_at||nowIso()};setter(exists?list.map((x:any)=>x.id===final.id?final:x):[final,...list]);await dbUpsert(table,final);await log(exists?'update':'create',entity,final.id,title||final.title);toast('ذخیره شد');setModal(null)}
@@ -384,7 +404,7 @@ function IHOSApp(){
         {view==='communications'&&can('communications')&&<CommunicationsCenterV18 me={me} hotels={hotels} users={users} onCreateTask={draftTaskForHotel}/>}
         {view==='calendar'&&can('calendar')&&<CalendarPlusV17 tasks={visibleTasks} events={events} reminders={reminders} users={users} hotels={hotels} add={()=>openModal('event')} edit={(e:EventT)=>openModal('event',e)} remove={(id:string)=>remove('ihos_calendar_events',id,()=>setEvents(events.filter(e=>e.id!==id)))}/>} 
         {view==='documents'&&can('documents')&&<Docs docs={docs} hotels={hotels} can={can} add={()=>openModal('doc')} edit={(d:Doc)=>openModal('doc',d)} remove={(id:string)=>remove('ihos_documents',id,()=>setDocs(docs.filter(d=>d.id!==id)))}/>} 
-        {view==='team'&&can('team')&&<><Team users={users} roles={roles} tasks={tasks} activities={activities} logs={logs} profile={(u:User)=>openModal('employeeProfile',u)} edit={(u:User)=>openModal('user',u)} add={()=>openModal('user')} remove={(id:string)=>remove('ihos_users',id,()=>setUsers(users.filter(u=>u.id!==id)))}/><TeamCoverageV17 users={users} tasks={tasks} hotels={hotels}/></>}
+        {view==='team'&&can('team')&&<><ExpertImporter run={importExperts}/><Team users={users} roles={roles} tasks={tasks} activities={activities} logs={logs} profile={(u:User)=>openModal('employeeProfile',u)} edit={(u:User)=>openModal('user',u)} add={()=>openModal('user')} remove={(id:string)=>remove('ihos_users',id,()=>setUsers(users.filter(u=>u.id!==id)))}/><TeamCoverageV17 users={users} tasks={tasks} hotels={hotels}/></>}
         {view==='kpiCenter'&&can('kpiCenter')&&<KpiCenterV18 users={users} tasks={tasks} activities={activities} goals={goals}/>}
         {view==='roles'&&can('roles')&&<Roles roles={roles} edit={(r:Role)=>openModal('role',r)} add={()=>openModal('role')} remove={(id:string)=>remove('ihos_roles',id,()=>setRoles(roles.filter(r=>r.id!==id)))}/>} 
         {view==='logs'&&can('logs')&&<ActivityLogs logs={logs} users={users}/>} 
@@ -483,6 +503,10 @@ function Hotels({hotels,tasks,can,edit,profile,remove,importExcel}:any){
   const lanes=['VIP قراردادی','نیازمند پیگیری','بدون ظرفیت','قرارداد / اسناد'];
   const laneData=(lane:string)=>hotels.filter((h:HotelT)=> lane==='بدون ظرفیت'?Number(h.capacity_total||0)===0: lane==='نیازمند پیگیری'?openTasks(h.id)>0||(h.risk_status||'').includes('ریسک'): lane==='قرارداد / اسناد'?(h.contract_status||'').includes('تمدید')||(h.contract_status||'').includes('نیاز'): (h.hotel_category||'').includes('VIP')||health(h)>70);
   return <div className="hotelCrmPage"><div className="pageHead crmHead"><div><h2>Hotel CRM</h2><p className="muted">پرونده ۳۶۰ درجه هتل‌ها، ظرفیت، قرارداد، Provider، ریسک و تسک‌های فعال</p></div><div className="actions"><div className="seg"><button className={mode==='pipeline'?'on':''} onClick={()=>setMode('pipeline')}>Pipeline</button><button className={mode==='cards'?'on':''} onClick={()=>setMode('cards')}>Cards</button><button className={mode==='list'?'on':''} onClick={()=>setMode('list')}>List</button></div>{can('hotels_import')&&<button className="btn ghost" onClick={importExcel}><Upload/> ورود اکسل</button>}<button className="btn ghost" onClick={()=>csv(hotels,'hotels.csv')}><Download/> CSV</button><button className="btn primary" onClick={()=>edit(null)}><Plus/> هتل جدید</button></div></div><div className="crmSummary"><div><b>{hotels.length}</b><span>کل هتل‌ها</span></div><div><b>{hotels.filter((h:HotelT)=>Number(h.capacity_total||0)===0).length}</b><span>بدون ظرفیت</span></div><div><b>{hotels.filter((h:HotelT)=>(h.contract_status||'').includes('تمدید')).length}</b><span>نیازمند تمدید</span></div><div><b>{tasks.filter((t:Task)=>t.hotel_id&&t.status!=='انجام شد').length}</b><span>تسک باز</span></div></div>{mode==='pipeline'&&<div className="crmPipeline">{lanes.map(l=><section className="crmStage" key={l}><h3>{l}<span>{laneData(l).length}</span></h3>{laneData(l).map((h:HotelT)=><article className="hotelCardPro" key={h.id}><div className="hotelAvatar">{(h.title||'ه').slice(0,1)}</div><div className="hotelInfo"><b>{h.title}</b><small>{h.city||'—'} • {h.grade||'بدون درجه'} • {h.provider||'بدون Provider'}</small></div><div className="hotelChips"><span>ظرفیت {h.capacity_total||0}</span><span>تسک {openTasks(h.id)}</span><span>{h.cooperation_status||'نامشخص'}</span></div><Progress value={health(h)}/><div className="hotelActions"><button className="btn ghost" onClick={()=>edit(h)}><Eye/> پرونده</button><button className="iconBtn dangerBtn" onClick={()=>remove(h.id)}><Trash2/></button></div></article>)}</section>)}</div>}{mode==='cards'&&<div className="hotelGrid">{hotels.map((h:HotelT)=><article className="hotelBigCard" key={h.id}><div className="hotelBigTop"><div className="hotelAvatar lg">{(h.title||'ه').slice(0,1)}</div><div><h3>{h.title}</h3><p>{h.city} • {h.province}</p></div></div><div className="hotelMetrics"><span><b>{h.capacity_total||0}</b>ظرفیت</span><span><b>{openTasks(h.id)}</b>تسک باز</span><span><b>{health(h)}٪</b>سلامت</span></div><div className="hotelChips"><span>{h.hotel_category||'دسته نامشخص'}</span><span>{h.contract_status||'قرارداد نامشخص'}</span></div><Progress value={health(h)}/><div className="actions"><button className="btn primary" onClick={()=>edit(h)}>ویرایش پرونده</button><button className="btn ghost dangerText" onClick={()=>remove(h.id)}>حذف</button></div></article>)}</div>}{mode==='list'&&<div className="card softTable"><table className="table"><thead><tr><th>کد</th><th>هتل</th><th>شهر</th><th>درجه</th><th>Provider</th><th>ظرفیت</th><th>تسک باز</th><th>سلامت</th><th></th></tr></thead><tbody>{hotels.map((h:HotelT)=><tr key={h.id}><td>{h.hotel_code}</td><td><b>{h.title}</b><small>{h.cooperation_status}</small></td><td>{h.city}</td><td>{h.grade||`${h.star||0} ستاره`}</td><td>{h.provider}</td><td>{h.capacity_total||0}</td><td>{openTasks(h.id)}</td><td><Progress value={health(h)}/></td><td><button className="iconBtn" onClick={()=>profile(h)}><Eye/></button><button className="iconBtn" onClick={()=>edit(h)}><Edit3/></button><button className="iconBtn dangerBtn" onClick={()=>remove(h.id)}><Trash2/></button></td></tr>)}</tbody></table></div>}</div>
+}
+function ExpertImporter({run}:any){
+  const [busy,setBusy]=useState(false);const ref=useRef<HTMLInputElement|null>(null);
+  return <div className="card expertImportBar"><div><b>ورود گروهی کارشناسان</b><small>Excel یا CSV؛ نام، نام کاربری، تیم، منطقه، نقش، ایمیل و موبایل</small></div><button className="btn ghost" disabled={busy} onClick={()=>ref.current?.click()}><Upload/> {busy?'در حال اعمال...':'انتخاب فایل کارشناسان'}</button><input ref={ref} hidden type="file" accept=".xlsx,.xls,.csv" onClick={e=>{e.currentTarget.value=''}} onChange={async e=>{const file=e.target.files?.[0];if(!file)return;setBusy(true);try{await run(file)}catch(error:any){toast(`اعمال فایل کارشناسان ناموفق بود: ${error.message}`)}finally{setBusy(false)}}}/></div>
 }
 function Team({users,roles,tasks,activities,logs,profile,edit,add,remove}:any){
   const [view,setView]=useState<'activity'|'list'>('activity');

@@ -370,3 +370,5 @@ body{line-height:1.6}.main{min-height:100dvh}.content:focus{outline:none}
 .v17MessageList header time,.v17Agenda article>time{font-size:11px;color:var(--muted)}
 .v17Drawer:focus,.v18Drawer:focus,.hotelDrawerV15:focus{outline:none}
 @media(max-width:760px){body{font-size:16px}.content{padding:12px 10px 88px!important}.pageHead,.employeesHead{align-items:stretch!important;flex-direction:column}.pageHead>.actions,.employeesHead>.actions{width:100%}.pageHead>.actions>.btn,.employeesHead>.actions>.btn{flex:1}.softTable .table,.card:has(>.table) .table{min-width:720px}.modalWrap{padding:8px}.modal{width:100%!important;max-height:96dvh!important;border-radius:20px!important}.toast{right:16px;bottom:76px}.saving{left:16px;bottom:20px}.v18Hero,.v17Hero{border-radius:18px!important}}
+.expertImportBar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;padding:14px 18px}.expertImportBar>div{display:grid;gap:3px}.expertImportBar small{color:var(--muted)}
+@media(max-width:760px){.expertImportBar{align-items:stretch;flex-direction:column}.expertImportBar .btn{width:100%}}
