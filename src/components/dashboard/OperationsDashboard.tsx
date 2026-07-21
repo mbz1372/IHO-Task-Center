@@ -160,10 +160,10 @@ export default function OperationsDashboard({tasks=[],activities=[],users=[],goa
     </section>
 
     <div className="dashboardToolbarV15">
-      <div className={loading?'syncStateV15 loading':'syncStateV15'}>{loading?<RefreshCcw className="spin"/>:<Wifi/>}<span>{loading?'در حال همگام‌سازی آمار اصلی...':'آخرین آمار از دیتابیس اصلی'}</span></div>
-      <button className="btn ghost" onClick={refresh}><RefreshCcw size={16}/> بروزرسانی داشبورد</button>
+      <div className={loading?'syncStateV15 loading':'syncStateV15'} role="status" aria-live="polite">{loading?<RefreshCcw className="spin"/>:<Wifi/>}<span>{loading?'در حال همگام‌سازی آمار اصلی...':'آخرین آمار از دیتابیس اصلی'}</span></div>
+      <button className="btn ghost" disabled={loading} onClick={refresh}><RefreshCcw className={loading?'spin':''} size={16}/> بروزرسانی داشبورد</button>
     </div>
-    {error&&<div className="notice dangerNoticeV15">{error}</div>}
+    {error&&<div className="notice dangerNoticeV15" role="alert">{error}</div>}
 
     <section className="metricGridV15">
       <Metric icon={Building2} title="کل هتل‌ها" value={hotel.total} hint="جدول اصلی هتل‌ها" tone="blue"/>
@@ -175,22 +175,22 @@ export default function OperationsDashboard({tasks=[],activities=[],users=[],goa
     </section>
 
     <section className="dashboardChartsV15">
-      <article className="chartCardV15 wide">
+      <article className="chartCardV15 wide" role="img" aria-label={`روند هفت روزه تسک‌ها؛ ${trend.map((x:any)=>`${x.day}: ${x.created} ایجاد و ${x.completed} تکمیل`).join('، ')}`}>
         <div className="chartHeadV15"><div><span>روند ۷ روز اخیر</span><h3>ورودی و خروجی تسک‌ها</h3></div><span className="chartBadgeV15">عملکرد روزانه</span></div>
         <div className="chartBodyV15"><ResponsiveContainer width="100%" height="100%"><AreaChart data={trend} margin={{top:10,right:4,left:4,bottom:0}}><defs><linearGradient id="createdGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={.38}/><stop offset="100%" stopColor="#2563eb" stopOpacity={.02}/></linearGradient><linearGradient id="doneGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#14b8a6" stopOpacity={.35}/><stop offset="100%" stopColor="#14b8a6" stopOpacity={.02}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--line)"/><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill:'var(--muted)',fontSize:11}}/><YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill:'var(--muted)',fontSize:11}} width={28}/><Tooltip contentStyle={{background:'var(--card)',border:'1px solid var(--line)',borderRadius:14,color:'var(--text)'}}/><Legend/><Area type="monotone" dataKey="created" name="ایجاد شده" stroke="#2563eb" strokeWidth={2.5} fill="url(#createdGradient)"/><Area type="monotone" dataKey="completed" name="تکمیل شده" stroke="#14b8a6" strokeWidth={2.5} fill="url(#doneGradient)"/></AreaChart></ResponsiveContainer></div>
       </article>
 
-      <article className="chartCardV15">
+      <article className="chartCardV15" role="img" aria-label={`ترکیب وضعیت تسک‌ها؛ ${statusData.map((x:any)=>`${x.name}: ${x.value}`).join('، ')}`}>
         <div className="chartHeadV15"><div><span>ترکیب تسک‌ها</span><h3>وضعیت جریان کار</h3></div></div>
         <div className="chartBodyV15 donut"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={statusData} dataKey="value" nameKey="name" innerRadius={64} outerRadius={92} paddingAngle={4}>{statusData.map((_:any,i:number)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}</Pie><Tooltip contentStyle={{background:'var(--card)',border:'1px solid var(--line)',borderRadius:14,color:'var(--text)'}}/><Legend verticalAlign="bottom" height={34}/></PieChart></ResponsiveContainer><div className="donutCenterV15"><b>{fa(tasks.length)}</b><span>کل تسک</span></div></div>
       </article>
 
-      <article className="chartCardV15">
+      <article className="chartCardV15" role="img" aria-label={`توزیع Providerها؛ ${hotel.providers.map((x:any)=>`${x.name}: ${x.count}`).join('، ')}`}>
         <div className="chartHeadV15"><div><span>توزیع تأمین‌کننده</span><h3>Providerهای پرتعداد</h3></div></div>
         <div className="chartBodyV15"><ResponsiveContainer width="100%" height="100%"><BarChart data={hotel.providers} layout="vertical" margin={{top:4,right:18,left:4,bottom:0}}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--line)"/><XAxis type="number" hide/><YAxis type="category" dataKey="name" width={95} axisLine={false} tickLine={false} tick={{fill:'var(--muted)',fontSize:10}}/><Tooltip contentStyle={{background:'var(--card)',border:'1px solid var(--line)',borderRadius:14,color:'var(--text)'}}/><Bar dataKey="count" name="هتل" fill="#2563eb" radius={[8,8,8,8]} barSize={16}/></BarChart></ResponsiveContainer></div>
       </article>
 
-      <article className="chartCardV15 wide">
+      <article className="chartCardV15 wide" role="img" aria-label={`عملکرد تیم؛ ${people.map((x:any)=>`${x.name}: ${x.done} تکمیل و ${x.active} فعال`).join('، ')}`}>
         <div className="chartHeadV15"><div><span>عملکرد تیم</span><h3>تسک‌های تکمیل‌شده و فعال</h3></div><span className="chartBadgeV15">۶ نفر برتر</span></div>
         <div className="chartBodyV15"><ResponsiveContainer width="100%" height="100%"><BarChart data={people} margin={{top:8,right:4,left:4,bottom:8}}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--line)"/><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'var(--muted)',fontSize:10}}/><YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill:'var(--muted)',fontSize:10}} width={28}/><Tooltip contentStyle={{background:'var(--card)',border:'1px solid var(--line)',borderRadius:14,color:'var(--text)'}}/><Legend/><Bar dataKey="done" name="تکمیل‌شده" fill="#14b8a6" radius={[7,7,0,0]}/><Bar dataKey="active" name="در جریان" fill="#2563eb" radius={[7,7,0,0]}/></BarChart></ResponsiveContainer></div>
       </article>
@@ -199,7 +199,7 @@ export default function OperationsDashboard({tasks=[],activities=[],users=[],goa
     <section className="dashboardBottomV15">
       <article className="panelV15">
         <div className="panelHeadV15"><div><span>نیازمند توجه</span><h3>تسک‌های اولویت‌دار</h3></div><button onClick={()=>setView('tasks')}>مشاهده همه</button></div>
-        <div className="priorityListV15">{tasks.filter((t:any)=>t.status!=='انجام شد'&&t.status!=='بسته شده').sort((a:any,b:any)=>(a.priority==='فوری'?-2:0)-(b.priority==='فوری'?-2:0)||String(a.deadline||'').localeCompare(String(b.deadline||''))).slice(0,6).map((t:any)=><div key={t.id}><span className={`priorityDotV15 ${t.priority==='فوری'?'red':t.priority==='بالا'?'orange':'blue'}`}/><div><b>{t.title}</b><small>{t.hotel_title||'بدون هتل'} · {t.assigned_name||'بدون مسئول'}</small></div><time>{t.deadline?new Intl.DateTimeFormat('fa-IR',{month:'short',day:'numeric'}).format(new Date(t.deadline)):'بدون موعد'}</time></div>)}</div>
+        <div className="priorityListV15">{tasks.filter((t:any)=>t.status!=='انجام شد'&&t.status!=='بسته شده').sort((a:any,b:any)=>(a.priority==='فوری'?-2:0)-(b.priority==='فوری'?-2:0)||String(a.deadline||'').localeCompare(String(b.deadline||''))).slice(0,6).map((t:any)=><div key={t.id}><span className={`priorityDotV15 ${t.priority==='فوری'?'red':t.priority==='بالا'?'orange':'blue'}`}/><div><b>{t.title}</b><small>{t.hotel_title||'بدون هتل'} · {t.assigned_name||'بدون مسئول'}</small></div><time dateTime={t.deadline||undefined}>{t.deadline?new Intl.DateTimeFormat('fa-IR',{month:'short',day:'numeric'}).format(new Date(t.deadline)):'بدون موعد'}</time></div>)}</div>
       </article>
       <article className="panelV15 insightPanelV15">
         <Sparkles/>

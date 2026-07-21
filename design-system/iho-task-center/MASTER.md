@@ -1,0 +1,219 @@
+# Design System Master File
+
+> **LOGIC:** When building a specific page, first check `design-system/iho-task-center/pages/[page-name].md`.
+> If that file exists, its rules **override** this Master file.
+> If not, strictly follow the rules below.
+
+---
+
+**Project:** IHO Task Center
+**Generated:** 2026-07-21 11:10:17
+**Category:** Analytics Dashboard
+**Design Dials:** Variance 4/10 (Balanced / Modern) | Motion 3/10 (Subtle) | Density 8/10 (Dense / Dashboard)
+
+---
+
+## Global Rules
+
+### Color Palette
+
+| Role | Hex | CSS Variable |
+|------|-----|--------------|
+| Primary | `#2563EB` | `--color-primary` |
+| On Primary | `#FFFFFF` | `--color-on-primary` |
+| Secondary | `#3B82F6` | `--color-secondary` |
+| Accent/CTA | `#059669` | `--color-accent` |
+| Background | `#F8FAFC` | `--color-background` |
+| Foreground | `#0F172A` | `--color-foreground` |
+| Muted | `#F1F5FD` | `--color-muted` |
+| Border | `#E4ECFC` | `--color-border` |
+| Destructive | `#DC2626` | `--color-destructive` |
+| Ring | `#2563EB` | `--color-ring` |
+
+**Color Notes:** Professional blue + deal green
+
+### Typography and direction
+
+- **Primary font:** Vazirmatn Variable
+- **Fallbacks:** Vazirmatn, Tahoma, Arial, sans-serif
+- **Direction:** RTL by default; numbers use tabular figures for KPI comparison
+- **Mood:** operational, precise, readable and native for Persian users
+- **Minimum body size:** 12px on dense desktop views and 14px on mobile
+
+The generic Latin recommendation has intentionally been replaced because the
+product is Persian-first. Do not introduce a second display font for headings.
+
+### Spacing Variables
+
+*Density: 8/10 — Dense / Dashboard*
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--space-xs` | `2px` / `0.125rem` | Tight gaps |
+| `--space-sm` | `4px` / `0.25rem` | Icon gaps, inline spacing |
+| `--space-md` | `8px` / `0.5rem` | Standard padding |
+| `--space-lg` | `12px` / `0.75rem` | Section padding |
+| `--space-xl` | `16px` / `1rem` | Large gaps |
+| `--space-2xl` | `24px` / `1.5rem` | Section margins |
+| `--space-3xl` | `32px` / `2rem` | Hero padding |
+
+### Shadow Depths
+
+| Level | Value | Usage |
+|-------|-------|-------|
+| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` | Subtle lift |
+| `--shadow-md` | `0 4px 6px rgba(0,0,0,0.1)` | Cards, buttons |
+| `--shadow-lg` | `0 10px 15px rgba(0,0,0,0.1)` | Modals, dropdowns |
+| `--shadow-xl` | `0 20px 25px rgba(0,0,0,0.15)` | Hero images, featured cards |
+
+---
+
+## Component Specs
+
+### Buttons
+
+```css
+/* Primary Button */
+.btn-primary {
+  background: #059669;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 200ms ease;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* Secondary Button */
+.btn-secondary {
+  background: transparent;
+  color: #2563EB;
+  border: 2px solid #2563EB;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 200ms ease;
+  cursor: pointer;
+}
+```
+
+### Cards
+
+```css
+.card {
+  background: #F8FAFC;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--shadow-md);
+  transition: all 200ms ease;
+  cursor: pointer;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+```
+
+### Inputs
+
+```css
+.input {
+  padding: 12px 16px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 200ms ease;
+}
+
+.input:focus {
+  border-color: #2563EB;
+  outline: none;
+  box-shadow: 0 0 0 3px #2563EB20;
+}
+```
+
+### Modals
+
+```css
+.modal-overlay {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: var(--shadow-xl);
+  max-width: 500px;
+  width: 90%;
+}
+```
+
+---
+
+## Style Guidelines
+
+**Style:** Data-Dense Dashboard
+
+**Keywords:** Multiple charts/widgets, data tables, KPI cards, minimal padding, grid layout, space-efficient, maximum data visibility
+
+**Best For:** Business intelligence dashboards, financial analytics, enterprise reporting, operational dashboards, data warehousing
+
+**Key Effects:** Hover tooltips, chart zoom on click, row highlighting on hover, smooth filter animations, data loading spinners
+
+### Page Pattern
+
+**Pattern Name:** Real-Time Operations Hub
+
+- **Decision Strategy:** Surface exceptions first, then ownership and next action.
+- **Primary Action:** Contextual task creation beside the relevant hotel or signal.
+- **Section Order:** 1. Critical signals, 2. KPIs, 3. Filterable work queue, 4. Ownership and activity timeline.
+- **RTL rule:** Identity appears on the right; status and actions remain predictable on the left.
+
+---
+
+## Motion
+
+Use subtle CSS transitions between 150–220ms for hover, focus, drawers and filters.
+Navigation and data refresh must never wait for animation. Respect
+`prefers-reduced-motion` and disable non-essential motion when requested.
+
+---
+
+## Anti-Patterns (Do NOT Use)
+
+- ❌ Ornate design
+- ❌ No filtering
+
+### Additional Forbidden Patterns
+
+- ❌ **Emojis as icons** — Use SVG icons (Heroicons, Lucide, Simple Icons)
+- ❌ **Missing cursor:pointer** — All clickable elements must have cursor:pointer
+- ❌ **Layout-shifting hovers** — Avoid scale transforms that shift layout
+- ❌ **Low contrast text** — Maintain 4.5:1 minimum contrast ratio
+- ❌ **Instant state changes** — Always use transitions (150-300ms)
+- ❌ **Invisible focus states** — Focus states must be visible for a11y
+
+---
+
+## Pre-Delivery Checklist
+
+Before delivering any UI code, verify:
+
+- [ ] No emojis used as icons (use SVG instead)
+- [ ] All icons from consistent icon set (Heroicons/Lucide)
+- [ ] `cursor-pointer` on all clickable elements
+- [ ] Hover states with smooth transitions (150-300ms)
+- [ ] Light mode: text contrast 4.5:1 minimum
+- [ ] Focus states visible for keyboard navigation
+- [ ] `prefers-reduced-motion` respected
+- [ ] Responsive: 375px, 768px, 1024px, 1440px
+- [ ] No content hidden behind fixed navbars
+- [ ] No horizontal scroll on mobile
