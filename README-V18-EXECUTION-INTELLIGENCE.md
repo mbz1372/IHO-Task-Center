@@ -31,3 +31,11 @@
 npx tsc --noEmit
 npm run build
 ```
+
+## استاندارد رابط نسخه ۱۸.۱
+
+- مرجع توکن‌ها: `src/app/design-tokens.css`
+- راهنمای برند: `docs/brand-guidelines.md`
+- مرجع تصمیم‌های طراحی: `design-system/iho-task-center/MASTER.md`
+- تمام Dialog و Drawerهای اصلی باید با Escape بسته شوند، Focus را محبوس کنند و پس از بسته‌شدن Focus را به کنترل قبلی برگردانند.
+- هیچ عملیات اصلی نباید فقط به Drag & Drop، Hover یا رنگ وابسته باشد.
