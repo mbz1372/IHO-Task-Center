@@ -98,20 +98,22 @@ export default function HotelSuperApp({isSuperAdmin=false,actor,onCreateTask,ini
   async function loadData(force=false){
     setBusy(true);setMsg('در حال همگام‌سازی پرونده‌های هتل...');
     try{
-      if(force&&typeof window!=='undefined'){sessionStorage.removeItem('ihos-superapp-snapshot-v16');sessionStorage.removeItem('ihos-dashboard-hotel-snapshot-v16')}
-      const cached=typeof window!=='undefined'?sessionStorage.getItem('ihos-superapp-snapshot-v16'):null;
+      if(force&&typeof window!=='undefined'){sessionStorage.removeItem('ihos-superapp-snapshot-v22');sessionStorage.removeItem('ihos-dashboard-hotel-snapshot-v16')}
+      const cached=typeof window!=='undefined'?sessionStorage.getItem('ihos-superapp-snapshot-v22'):null;
       if(cached&&!force){
         try{const p=JSON.parse(cached);if(Date.now()-p.at<5*60*1000){setRules(p.rules);setMaster(p.rows);setMsg(`${fa(p.rows.length)} هتل از کش سریع`);setBusy(false);return}}catch{}
       }
       const nextRules=await loadRules();
-      const [hotels,automation]=await Promise.all([
+      const [hotels,automation,assignments]=await Promise.all([
         loadAll('ihos_hotels','id,hotel_code,title,city,province,caring_category,cooperation_status,provider,pms,grade,crm_stage'),
-        loadAll('ihos_hotel_automation','hotel_id,provider,hotel_rate,hotel_capacity,rate_expert,capacity_expert,updated_at')
+        loadAll('ihos_hotel_automation','hotel_id,provider,hotel_rate,hotel_capacity,rate_expert,capacity_expert,updated_at'),
+        loadAll('ihos_hotel_assignments','hotel_id,user_name,assignment_role,active').catch(()=>[])
       ]);
       const autoMap=new Map(automation.map((a:any)=>[a.hotel_id,a]));
+      assignments.filter((a:any)=>a.active!==false).forEach((a:any)=>{const current:any=autoMap.get(a.hotel_id)||{hotel_id:a.hotel_id};if(a.assignment_role==='rate_expert')current.rate_expert=a.user_name;if(a.assignment_role==='capacity_expert')current.capacity_expert=a.user_name;if(a.assignment_role==='account_manager'){current.rate_expert=current.rate_expert||a.user_name;current.capacity_expert=current.capacity_expert||a.user_name}autoMap.set(a.hotel_id,current)});
       const rows=hotels.map((h:any)=>enrich(h,autoMap.get(h.id),nextRules));
       setRules(nextRules);setMaster(rows);setMsg(`${fa(rows.length)} هتل از دیتابیس اصلی دریافت شد`);
-      if(typeof window!=='undefined')sessionStorage.setItem('ihos-superapp-snapshot-v16',JSON.stringify({at:Date.now(),rules:nextRules,rows}));
+      if(typeof window!=='undefined')sessionStorage.setItem('ihos-superapp-snapshot-v22',JSON.stringify({at:Date.now(),rules:nextRules,rows}));
     }catch(e:any){setMsg(`خطای دریافت اطلاعات: ${e.message}`)}finally{setBusy(false)}
   }
   useEffect(()=>{void loadData()},[]);
@@ -137,11 +139,11 @@ export default function HotelSuperApp({isSuperAdmin=false,actor,onCreateTask,ini
 
   const experts=useMemo(()=>{
     const map=new Map<string,ExpertRow>();
-    master.filter(r=>isSellable(r)&&norm(r.provider)==='iho provider').forEach(r=>{
+    master.filter(r=>norm(r.provider)==='iho provider').forEach(r=>{
       if(r.rate_expert){const e=map.get(r.rate_expert)||{expert_name:r.rate_expert,rate_hotels:0,capacity_hotels:0,total_hotels:0};e.rate_hotels++;map.set(r.rate_expert,e)}
       if(r.capacity_expert){const e=map.get(r.capacity_expert)||{expert_name:r.capacity_expert,rate_hotels:0,capacity_hotels:0,total_hotels:0};e.capacity_hotels++;map.set(r.capacity_expert,e)}
     });
-    for(const e of map.values())e.total_hotels=new Set(master.filter(r=>isSellable(r)&&(r.rate_expert===e.expert_name||r.capacity_expert===e.expert_name)).map(r=>r.id)).size;
+    for(const e of map.values())e.total_hotels=new Set(master.filter(r=>r.rate_expert===e.expert_name||r.capacity_expert===e.expert_name).map(r=>r.id)).size;
     return [...map.values()].sort((a,b)=>b.total_hotels-a.total_hotels)
   },[master]);
 
@@ -175,7 +177,8 @@ export default function HotelSuperApp({isSuperAdmin=false,actor,onCreateTask,ini
     setBusy(true);setMsg('در حال تطبیق کارشناسان نرخ و ظرفیت...');
     try{
       const data=await rowsFromFile(file);const hotelByCode=new Map(master.map(h=>[norm(h.hotel_code),h]));const hotelByTitle=new Map(master.map(h=>[norm(h.title),h]));const merged=new Map<string,any>();
-      data.forEach(r=>{const code=text(r,['کد هتل','hotel_code','HotelCode']);const title=text(r,['نام هتل','هتل','hotel','HotelName']);const h=hotelByCode.get(norm(code))||hotelByTitle.get(norm(title));if(!h)return;const taskId=Number(val(r,['task id','task_id','TaskId','نوع تسک']));const expert=text(r,['نام','نام کارشناس','کارشناس','expert_name','full_name']);if(!expert||![1,2].includes(taskId))return;const row=merged.get(h.id)||{id:`automation-${h.id}`,hotel_id:h.id,hotel_code:h.hotel_code,provider:h.provider||'IHO Provider',hotel_rate:!!h.hotel_rate,hotel_capacity:!!h.hotel_capacity};if(taskId===1)row.capacity_expert=expert;if(taskId===2)row.rate_expert=expert;row.updated_at=new Date().toISOString();merged.set(h.id,row)});
+      data.forEach(r=>{const code=text(r,['کد هتل','hotel_code','HotelCode']);const title=text(r,['نام هتل','هتل','hotel','HotelName']);const h=hotelByCode.get(norm(code))||hotelByTitle.get(norm(title));if(!h)return;const taskId=Number(val(r,['taskId','task id','task_id','TaskId','نوع تسک']));const expert=text(r,['First name','نام','نام کارشناس','کارشناس','expert_name','full_name']);if(!expert||![1,2].includes(taskId))return;const row=merged.get(h.id)||{id:`automation-${h.id}`,hotel_id:h.id,hotel_code:h.hotel_code,provider:h.provider||'IHO Provider',hotel_rate:!!h.hotel_rate,hotel_capacity:!!h.hotel_capacity};if(taskId===1)row.capacity_expert=expert;if(taskId===2)row.rate_expert=expert;row.updated_at=new Date().toISOString();merged.set(h.id,row)});
+      if(!merged.size)throw new Error('هیچ ردیفی تطبیق نشد؛ ستون‌های فایل باید نام هتل، taskId و First name باشند');
       await upsertChunks('ihos_hotel_automation',[...merged.values()],300);setMsg(`✅ تخصیص ${fa(merged.size)} هتل بروزرسانی شد`);await loadData(true)
     }catch(e:any){setMsg(`❌ ${e.message}`)}finally{setBusy(false)}
   }
@@ -183,7 +186,7 @@ export default function HotelSuperApp({isSuperAdmin=false,actor,onCreateTask,ini
   async function saveRule(rule:ProviderRule){
     const db=getSupabase();if(!db)return;
     const payload={id:`provider-${norm(rule.name).replace(/\s+/g,'-')}`,name:rule.name,rate_api:rule.rateApi,capacity_api:rule.capacityApi,active:rule.active,effective_from:rule.effectiveFrom||null,replacement_provider:rule.replacementProvider||null,priority:rule.priority};
-    const {error}=await db.from('ihos_provider_rules').upsert(payload,{onConflict:'id'});if(error){setMsg(error.message);return}setRules(rules.map(r=>r.name===rule.name?rule:r));sessionStorage.removeItem('ihos-superapp-snapshot-v16');setMsg('تنظیم Provider ذخیره شد')
+    const {error}=await db.from('ihos_provider_rules').upsert(payload,{onConflict:'id'});if(error){setMsg(error.message);return}setRules(rules.map(r=>r.name===rule.name?rule:r));sessionStorage.removeItem('ihos-superapp-snapshot-v22');setMsg('تنظیم Provider ذخیره شد')
   }
 
   async function deleteHotel(row:Row){
