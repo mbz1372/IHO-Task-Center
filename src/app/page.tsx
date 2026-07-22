@@ -274,17 +274,31 @@ function IHOSApp(){
       let query=db.from(table).select('*').range(from,from+pageSize-1);
       query=table==='ihos_hotels'?query.order('title',{ascending:true}):query.order('created_at',{ascending:false});
       const {data,error}=await query;
-      if(error){console.error(`Sync ${table} failed`,error);return}
+      if(error){
+        if(table==='ihos_departments'){
+          const fallback=await loadOrgMetadata(db,table);
+          if(fallback.length)setter(fallback);
+          return;
+        }
+        console.error(`Sync ${table} failed`,error);return
+      }
       const batch=data||[];
       all=all.concat(batch);
       if(batch.length<pageSize)break;
       from+=pageSize;
     }
+    if(table==='ihos_users'||table==='ihos_tasks'){
+      const metadata=await loadOrgMetadata(db,table);
+      if(metadata.length){const map=new Map(metadata.map((row:any)=>[row.id,row]));all=all.map(row=>({...row,...(map.get(row.id)||{})}))}
+    }
     setter(all);
   }
-  async function syncSettings(){const db=await getSupabaseClient();if(!db)return;const {data}=await db.from('ihos_settings').select('*');if(data?.length){const next={...DEFAULT_SETTINGS};data.forEach((r:any)=>(next as any)[r.key]=r.value);setSettings(next)}}
+  async function loadOrgMetadata(db:any,table:string){let from=0,all:any[]=[];while(true){const {data,error}=await db.from('ihos_settings').select('key,value').like('key',`orgmeta:${table}:%`).range(from,from+999);if(error)return[];const batch=data||[];all=all.concat(batch);if(batch.length<1000)break;from+=1000}return all.map((item:any)=>{try{return typeof item.value==='string'?JSON.parse(item.value):item.value}catch{return null}}).filter(Boolean)}
+  async function saveOrgMetadata(db:any,table:string,row:any){const meta=table==='ihos_users'?{id:row.id,avatar:row.avatar,department_id:row.department_id,department_name:row.department_name}:table==='ihos_tasks'?{id:row.id,department_id:row.department_id,department_name:row.department_name}:row;await db.from('ihos_settings').upsert({key:`orgmeta:${table}:${row.id}`,value:JSON.stringify(meta),updated_at:nowIso()})}
+  const isSchemaCompatibilityError=(error:any)=>['PGRST204','PGRST205','42703','42P01'].includes(error?.code)||/schema cache|column .* does not exist|relation .* does not exist|could not find the table/i.test(error?.message||'');
+  async function syncSettings(){const db=await getSupabaseClient();if(!db)return;const {data}=await db.from('ihos_settings').select('*');if(data?.length){const next={...DEFAULT_SETTINGS};data.filter((r:any)=>!String(r.key||'').startsWith('orgmeta:')).forEach((r:any)=>(next as any)[r.key]=r.value);setSettings(next)}}
   async function syncAll(){setBusy(true);try{const db=await getSupabaseClient();if(!db){setOnline(false);return}setOnline(true);await Promise.all([syncTable('ihos_roles',setRoles),syncTable('ihos_departments',setDepartments),syncTable('ihos_users',setUsers),syncTable('ihos_hotels',setHotels),syncTable('ihos_tasks',setTasks),syncTable('ihos_task_activities',setActivities),syncTable('ihos_documents',setDocs),syncTable('ihos_calendar_events',setEvents),syncTable('ihos_notifications',setNotifs),syncTable('ihos_activity_logs',setLogs),syncTable('ihos_hotel_events',setHotelEvents),syncTable('ihos_reminders',setReminders),syncTable('ihos_automations',setAutomations),syncTable('ihos_goals',setGoals),syncTable('ihos_projects',setProjects),syncSettings()]);toast('داده‌ها با Supabase سینک شد');}catch(e:any){setOnline(false);toast('اتصال آنلاین برقرار نشد: '+e.message)}finally{setBusy(false)}}
-  async function dbUpsert(table:string,row:any){const db=await getSupabaseClient();if(db){const {error}=await db.from(table).upsert(row);if(error) throw error}}
+  async function dbUpsert(table:string,row:any){const db=await getSupabaseClient();if(!db)return;const metadataTables=['ihos_users','ihos_tasks','ihos_departments'];const {error}=await db.from(table).upsert(row);if(error){if(!metadataTables.includes(table)||!isSchemaCompatibilityError(error))throw error;if(table!=='ihos_departments'){const compatible={...row};delete compatible.department_id;delete compatible.department_name;if(table==='ihos_users')delete compatible.avatar;const retry=await db.from(table).upsert(compatible);if(retry.error)throw retry.error}}if(metadataTables.includes(table))await saveOrgMetadata(db,table,row)}
   async function dbDelete(table:string,id:string){const db=await getSupabaseClient();if(db){const {error}=await db.from(table).delete().eq('id',id);if(error) throw error}}
   async function saveSettings(next:AppSettings){setSettings(next);const db=await getSupabaseClient();if(db){for(const key of Object.keys(next)){await db.from('ihos_settings').upsert({key,value:(next as any)[key],updated_at:nowIso()})}}toast('تنظیمات ذخیره شد')}
   async function toggleTheme(){const darkNow=document.documentElement.classList.contains('dark');const nextTheme:AppSettings['theme']=darkNow?'light':'dark';const next={...settings,theme:nextTheme};setSettings(next);document.documentElement.classList.toggle('dark',nextTheme==='dark');document.body.classList.toggle('dark',nextTheme==='dark');document.documentElement.style.colorScheme=nextTheme==='dark'?'dark':'light';try{const db=await getSupabaseClient();if(db)await db.from('ihos_settings').upsert({key:'theme',value:nextTheme,updated_at:nowIso()})}catch{}toast(nextTheme==='dark'?'حالت شب فعال شد':'حالت روشن فعال شد')}
