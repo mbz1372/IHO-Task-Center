@@ -42,7 +42,13 @@ async function loadAll(table:string,select='*'){
 }
 
 async function loadAssignments(){
-  return await loadAll('ihos_hotel_assignments','*') as Assignment[];
+  try{return await loadAll('ihos_hotel_assignments','*') as Assignment[]}
+  catch(error:any){
+    if(!/schema cache|could not find the table|does not exist|PGRST205/i.test(`${error?.message||error?.code||error}`))throw error;
+    const db=getSupabase();if(!db)return[];
+    const {data}=await db.from('ihos_settings').select('value').like('key','v23:ihos_hotel_assignments:%').limit(5000);
+    return(data||[]).map((item:any)=>item.value).filter(Boolean) as Assignment[];
+  }
 }
 
 async function loadOwnership(users:any[]){
