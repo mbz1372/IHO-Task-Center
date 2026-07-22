@@ -248,7 +248,7 @@ function IHOSApp(){
         .on('postgres_changes',{event:'*',schema:'public',table:'ihos_reminders'},()=>refreshMap.ihos_reminders())
         .on('postgres_changes',{event:'*',schema:'public',table:'ihos_projects'},()=>refreshMap.ihos_projects())
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'ihos_notifications',filter:`user_id=eq.${me.id}`},(payload:any)=>{
-          const n=payload.new as Notif; setNotifs([n,...notifs.filter(x=>x.id!==n.id)]); browserNotify(n.title,n.body||'');
+          const n=payload.new as Notif; setNotifs(current=>[n,...current.filter(x=>x.id!==n.id)]); browserNotify(n.title,n.body||'');
         })
         .subscribe();
       polling=setInterval(()=>syncAll(),90000);
@@ -283,7 +283,7 @@ function IHOSApp(){
   async function saveSettings(next:AppSettings){setSettings(next);const db=await getSupabaseClient();if(db){for(const key of Object.keys(next)){await db.from('ihos_settings').upsert({key,value:(next as any)[key],updated_at:nowIso()})}}toast('تنظیمات ذخیره شد')}
   async function toggleTheme(){const darkNow=document.documentElement.classList.contains('dark');const nextTheme:AppSettings['theme']=darkNow?'light':'dark';const next={...settings,theme:nextTheme};setSettings(next);document.documentElement.classList.toggle('dark',nextTheme==='dark');document.body.classList.toggle('dark',nextTheme==='dark');document.documentElement.style.colorScheme=nextTheme==='dark'?'dark':'light';try{const db=await getSupabaseClient();if(db)await db.from('ihos_settings').upsert({key:'theme',value:nextTheme,updated_at:nowIso()})}catch{}toast(nextTheme==='dark'?'حالت شب فعال شد':'حالت روشن فعال شد')}
   async function log(action:string,entity:string,entity_id?:string,title?:string,duration_minutes?:number){const row:ActivityLog={id:uid(),user_id:me?.id,user_name:me?.full_name,action,entity,entity_id,title,duration_minutes,created_at:nowIso()};setLogs([row,...logs]);try{await dbUpsert('ihos_activity_logs',row)}catch{}}
-  async function notifyUser(user_id:string,title:string,body?:string,entity_type?:string,entity_id?:string){const n:Notif={id:uid(),title,body,user_id,is_read:false,entity_type,entity_id,created_at:nowIso()};setNotifs([n,...notifs]);try{await dbUpsert('ihos_notifications',n)}catch{} if(user_id===me?.id) browserNotify(title,body||'')}
+  async function notifyUser(user_id:string,title:string,body?:string,entity_type?:string,entity_id?:string){const n:Notif={id:uid(),title,body,user_id,is_read:false,entity_type,entity_id,created_at:nowIso()};setNotifs(current=>[n,...current]);try{await dbUpsert('ihos_notifications',n)}catch{} if(user_id===me?.id) browserNotify(title,body||'')}
   function browserNotify(title:string,body:string){if(!settings.notifications || typeof Notification==='undefined')return;if(Notification.permission==='granted') new Notification(title,{body,icon:settings.faviconUrl||settings.logoUrl||undefined});}
   async function requestNotifications(){if(typeof Notification==='undefined'){toast('مرورگر از Notification پشتیبانی نمی‌کند');return}const p=await Notification.requestPermission();toast(p==='granted'?'نوتیفیکیشن مرورگر فعال شد':'دسترسی نوتیفیکیشن داده نشد')}
   async function uploadFile(file:File,folder:string){const db=await getSupabaseClient();if(!db)return URL.createObjectURL(file);const path=`${folder}/${Date.now()}-${file.name.replace(/\s+/g,'-')}`;const {error}=await db.storage.from('ihos-documents').upload(path,file,{upsert:true});if(error){toast('خطای آپلود: '+error.message);return URL.createObjectURL(file)}const {data}=db.storage.from('ihos-documents').getPublicUrl(path);return data.publicUrl}
@@ -382,6 +382,7 @@ function IHOSApp(){
     const ids=[...new Set(rows.map(r=>r.hotel_id))];for(let i=0;i<ids.length;i+=250){const {error}=await db.from('ihos_hotel_assignments').update({active:false,ended_at:today(),updated_at:nowIso()}).in('hotel_id',ids.slice(i,i+250)).in('assignment_role',['rate_expert','capacity_expert','account_manager']).eq('active',true);if(error)throw error}
     for(let i=0;i<rows.length;i+=250){const {error}=await db.from('ihos_hotel_assignments').upsert(rows.slice(i,i+250),{onConflict:'id'});if(error)throw error}
     sessionStorage.removeItem('ihos-superapp-snapshot-v22');
+    window.dispatchEvent(new CustomEvent('ihos-assignments-updated'));
     await log('import','hotel_assignment',undefined,`تخصیص ${rows.length} هتل به کارشناس`);
     const notes=[`${rows.length.toLocaleString('fa-IR')} تخصیص اعمال شد`];if(missingHotels.length)notes.push(`${missingHotels.length.toLocaleString('fa-IR')} نام هتل تطبیق نداشت`);if(missingUsers.length)notes.push(`${missingUsers.length.toLocaleString('fa-IR')} نام کارشناس تطبیق نداشت`);toast(notes.join(' · '));
   }
