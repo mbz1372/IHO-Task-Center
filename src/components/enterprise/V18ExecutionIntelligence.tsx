@@ -45,6 +45,26 @@ async function loadAssignments(){
   return await loadAll('ihos_hotel_assignments','*') as Assignment[];
 }
 
+async function loadOwnership(users:any[]){
+  const [assignmentResult,automationResult]=await Promise.allSettled([
+    loadAssignments(),
+    loadAll('ihos_hotel_automation','hotel_id,rate_expert,capacity_expert,updated_at')
+  ]);
+  if(assignmentResult.status==='rejected'&&automationResult.status==='rejected')throw assignmentResult.reason;
+  const rows:Assignment[]=assignmentResult.status==='fulfilled'?[...assignmentResult.value]:[];
+  const activeKeys=new Set(rows.filter(row=>row.active!==false).map(row=>`${row.hotel_id}-${row.assignment_role}`));
+  const cleanPerson=(value:any)=>norm(value).replace(/خانم|آقای|جناب|سرکار|محترم|دکتر/g,'').replace(/[،,.()]/g,' ').replace(/\s+/g,' ').trim();
+  const findUser=(name:string)=>{const needle=cleanPerson(name);return users.find(user=>{const candidate=cleanPerson(user.full_name);return user.is_active!==false&&(candidate===needle||candidate.includes(needle)||needle.includes(candidate))})};
+  if(automationResult.status==='fulfilled')automationResult.value.forEach((automation:any)=>{
+    ([['rate_expert',automation.rate_expert],['capacity_expert',automation.capacity_expert]] as [AssignmentRole,string][]).forEach(([role,name])=>{
+      if(!name||activeKeys.has(`${automation.hotel_id}-${role}`))return;
+      const user=findUser(name);if(!user)return;
+      rows.push({id:`automation-sync-${automation.hotel_id}-${role}`,hotel_id:automation.hotel_id,user_id:user.id,user_name:user.full_name,assignment_role:role,is_primary:true,active:true,updated_at:automation.updated_at});
+    });
+  });
+  return{rows,warning:assignmentResult.status==='rejected'?'جدول تاریخچه مالکیت هنوز فعال نیست؛ تخصیص‌های نرخ و ظرفیت از داده عملیاتی همگام شده‌اند. فایل migration نسخه ۲۲ را اجرا کنید.':''};
+}
+
 function useFullHotels(seed:any[]){
   const [hotels,setHotels]=useState<any[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState('');
   useEffect(()=>{let live=true;(async()=>{setLoading(true);try{const rows=await loadAll('ihos_hotels','id,hotel_code,title,city,province,provider,capacity_total,contract_status,contract_date,status_end_date,cooperation_status,risk_status,site_visible,search_visible,hotel_category,updated_at');if(live){setHotels(rows);setError('')}}catch(e:any){if(live){setHotels([]);setError(`دریافت هتل‌ها ناموفق بود: ${e.message}`)}}finally{if(live)setLoading(false)}})();return()=>{live=false}},[]);
@@ -104,12 +124,12 @@ export function HotelOwnershipV18({seedHotels=[],users=[],initialHotel}:any){
   const [rows,setRows]=useState<Assignment[]>([]),[q,setQ]=useState(''),[onlyMissing,setOnlyMissing]=useState(false),[selected,setSelected]=useState<any>(initialHotel||null),[draft,setDraft]=useState<Record<AssignmentRole,string>>({city_manager:'',account_manager:'',rate_expert:'',capacity_expert:''}),[busy,setBusy]=useState(false),[msg,setMsg]=useState('');
   useEffect(()=>{
     let active=true;
-    const refresh=()=>loadAssignments().then(data=>{if(active){setRows(data);setMsg('مسئولیت‌ها با آخرین تخصیص‌های کاربری همگام شدند')}}).catch(e=>{if(active)setMsg(`دریافت مسئولیت‌ها ناموفق بود: ${e.message}`)});
+    const refresh=()=>loadOwnership(users).then(result=>{if(active){setRows(result.rows);setMsg(result.warning||'مسئولیت‌ها با آخرین تخصیص‌های کاربری همگام شدند')}}).catch(e=>{if(active)setMsg(`دریافت مسئولیت‌ها ناموفق بود: ${e.message}`)});
     const onAssignmentsUpdated=()=>{void refresh()};
     void refresh();window.addEventListener('ihos-assignments-updated',onAssignmentsUpdated);
     const db=getSupabase(),channel=db?.channel('ihos-ownership-v22').on('postgres_changes',{event:'*',schema:'public',table:'ihos_hotel_assignments'},onAssignmentsUpdated).subscribe();
     return()=>{active=false;window.removeEventListener('ihos-assignments-updated',onAssignmentsUpdated);if(db&&channel)void db.removeChannel(channel)};
-  },[]);
+  },[users]);
   useEffect(()=>{if(initialHotel)setSelected(initialHotel)},[initialHotel]);
   const aMap=useMemo(()=>assignmentMap(rows),[rows]);
   useEffect(()=>{if(!selected)return;const list=aMap.get(selected.id)||[];setDraft({city_manager:list.find(x=>x.assignment_role==='city_manager')?.user_id||'',account_manager:list.find(x=>x.assignment_role==='account_manager')?.user_id||'',rate_expert:list.find(x=>x.assignment_role==='rate_expert')?.user_id||'',capacity_expert:list.find(x=>x.assignment_role==='capacity_expert')?.user_id||''})},[selected,aMap]);
@@ -137,7 +157,7 @@ export function HotelOwnershipV18({seedHotels=[],users=[],initialHotel}:any){
         }
       }
       setRows(next);sessionStorage.removeItem('ihos-superapp-snapshot-v22');window.dispatchEvent(new CustomEvent('ihos-assignments-updated'));setMsg('مسئولیت‌های هتل در Supabase ذخیره و با تخصیص‌های کاربری همگام شد');setSelected(null);
-    }catch(e:any){setMsg(`ذخیره مسئولیت‌ها ناموفق بود و داده محلی اعمال نشد: ${e.message}`);void loadAssignments().then(setRows).catch(()=>{})}finally{setBusy(false)}
+    }catch(e:any){setMsg(`ذخیره مسئولیت‌ها ناموفق بود و داده محلی اعمال نشد: ${e.message}`);void loadOwnership(users).then(result=>setRows(result.rows)).catch(()=>{})}finally{setBusy(false)}
   }
   return <div className="v18Module ownershipV18"><section className="v18Hero"><div><span>HOTEL OWNERSHIP</span><h2>مالکیت و پوشش پرونده هتل‌ها</h2><p>برای هر هتل مدیر شهر، اکانت منیجر، کارشناس نرخ و کارشناس ظرفیت را مشخص کن.</p></div><div className="v18HeroPulse"><Users/><b>{fa(complete)}</b><span>پوشش کامل</span></div></section>{hotelError&&<div className="v18Notice">{hotelError}</div>}<div className="v18Metrics"><Metric icon={Hotel} title="کل هتل‌ها" value={hotels.length} hint="داده قابل مدیریت"/><Metric icon={CheckCircle2} title="پوشش کامل" value={complete} hint="هر چهار نقش" tone="success"/><Metric icon={AlertTriangle} title="بدون مسئول" value={unassigned} hint="نیازمند تخصیص" tone="danger"/><Metric icon={UserCheck} title="کاربر فعال" value={users.filter((u:any)=>u.is_active).length} hint="قابل تخصیص" tone="purple"/></div><div className="v18Toolbar"><div className="v18Search"><Search/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="هتل، شهر یا نام کارشناس..."/></div><label className="v18Check"><input type="checkbox" checked={onlyMissing} onChange={e=>setOnlyMissing(e.target.checked)}/> فقط پوشش ناقص</label><span>{loading?<RefreshCcw className="spin"/>:<>{fa(filtered.length)} نتیجه</>}</span></div><div className="v18OwnershipGrid">{filtered.slice(0,240).map(h=>{const list=aMap.get(h.id)||[];return <article key={h.id}><header><div className="v18HotelAvatar">{h.title?.slice(0,1)||'ه'}</div><div><b>{h.title}</b><small>{h.hotel_code||'بدون کد'} · {h.city||'بدون شهر'}</small></div><span>{fa(list.length)}/۴</span></header><div className="v18RoleChips">{(Object.keys(ROLE_META) as AssignmentRole[]).map(role=>{const a=list.find(x=>x.assignment_role===role);return <div className={a?'filled':''} key={role}><small>{ROLE_META[role].label}</small><b>{a?.user_name||'تعیین نشده'}</b></div>})}</div><button className="btn ghost full" onClick={()=>setSelected(h)}><UserCheck/> مدیریت مسئولیت‌ها</button></article>})}</div>{selected&&<div className="v18DrawerBackdrop" onClick={()=>setSelected(null)}><aside className="v18Drawer" role="dialog" aria-modal="true" aria-label={`مدیریت مسئولیت‌های ${selected.title}`} onClick={e=>e.stopPropagation()}><header><div><span>پرونده مسئولیت</span><h3>{selected.title}</h3><p>{selected.city||'بدون شهر'} · {selected.hotel_code||'بدون کد'}</p></div><button aria-label="بستن" onClick={()=>setSelected(null)}><X/></button></header><div className="v18AssignmentForm">{(Object.keys(ROLE_META) as AssignmentRole[]).map(role=><label key={role}><div><b>{ROLE_META[role].label}</b><small>{ROLE_META[role].hint}</small></div><select value={draft[role]} onChange={e=>setDraft({...draft,[role]:e.target.value})}><option value="">بدون مسئول</option>{users.filter((u:any)=>u.is_active).map((u:any)=><option key={u.id} value={u.id}>{u.full_name} — {u.team||u.role||'تیم نامشخص'}</option>)}</select></label>)}</div>{msg&&<div className="v18Notice">{msg}</div>}<button className="btn primary full" disabled={busy} onClick={save}>{busy?<RefreshCcw className="spin"/>:<Check/>} ذخیره مسئولیت‌ها</button></aside></div>}</div>
 }
