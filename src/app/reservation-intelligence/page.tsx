@@ -1,283 +1,278 @@
-'use client';
+"use client";
 
-import React, { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
-import { AlertTriangle, ArrowRight, BarChart3, Bot, Brain, CheckCircle2, ClipboardList, Download, Hotel, RefreshCw, Sparkles, TrendingUp, Upload } from 'lucide-react';
+import React, { useMemo, useState } from "react";
+import * as XLSX from "xlsx";
+import { AlertTriangle, BarChart3, Bot, CheckCircle2, ClipboardList, Download, FileSpreadsheet, Hotel, Loader2, Sparkles, TrendingUp, Upload, Users } from "lucide-react";
 
-type ReservationRow = {
-  id: string;
-  hotel_title: string;
-  city?: string;
-  channel?: string;
-  status?: string;
-  confirmed: boolean;
-  nights: number;
-  amount: number;
-  profit: number;
-  reason?: string;
-  created_at?: string;
-  raw?: Record<string, any>;
-};
+type FileKey = "reservationList" | "hotelData" | "confirmedSales" | "unconfirmedSales" | "mehrMo" | "assignment" | "traffic";
+type Dataset = Record<FileKey, any[]>;
 
-type TrafficRow = {
-  id: string;
-  hotel_title?: string;
-  city?: string;
-  channel?: string;
-  sessions: number;
-  visitors: number;
-  searches: number;
-  room_views: number;
-  booking_starts: number;
-  reservations: number;
-  date?: string;
-  raw?: Record<string, any>;
-};
-
-type HotelInsight = {
+type Insight = {
   hotel: string;
   city: string;
+  category: string;
+  provider: string;
+  capacityOwner: string;
+  rateOwner: string;
   confirmed: number;
   unconfirmed: number;
   requests: number;
   nights: number;
-  amount: number;
+  sale: number;
   profit: number;
   sessions: number;
-  bookingStarts: number;
   conversion: number;
   trafficConversion: number;
   risk: number;
   reason: string;
 };
 
-const S: Record<string, React.CSSProperties> = {
-  page: { minHeight: '100vh', direction: 'rtl', background: '#f5f7fb', color: '#0f172a', fontFamily: 'Vazirmatn, IRANSans, Segoe UI, sans-serif' },
-  shell: { maxWidth: 1440, margin: '0 auto', padding: 24 },
-  hero: { display: 'grid', gridTemplateColumns: '1.5fr .9fr', gap: 18, alignItems: 'stretch' },
-  panel: { background: 'rgba(255,255,255,.92)', border: '1px solid #e5e7eb', borderRadius: 28, boxShadow: '0 18px 50px rgba(15,23,42,.07)', padding: 22 },
-  card: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 22, padding: 18, boxShadow: '0 12px 32px rgba(15,23,42,.05)' },
-  h1: { fontSize: 30, fontWeight: 900, margin: 0, letterSpacing: '-.02em' },
-  muted: { color: '#64748b', lineHeight: 1.9 },
-  grid4: { display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 14 },
-  grid3: { display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 14 },
-  grid2: { display: 'grid', gridTemplateColumns: '1.05fr .95fr', gap: 16 },
-  btn: { border: 0, borderRadius: 16, padding: '11px 15px', fontWeight: 800, cursor: 'pointer', background: '#2563eb', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 8 },
-  ghost: { border: '1px solid #e5e7eb', borderRadius: 16, padding: '10px 14px', fontWeight: 800, cursor: 'pointer', background: '#fff', color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: 8 },
-  table: { width: '100%', borderCollapse: 'separate', borderSpacing: '0 10px', fontSize: 13 },
-  th: { color: '#64748b', fontWeight: 800, textAlign: 'right', padding: '0 12px' },
-  td: { background: '#fff', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: 12 },
-  pill: { display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '6px 10px', fontSize: 12, fontWeight: 900 },
-  input: { border: '1px solid #e5e7eb', borderRadius: 16, padding: '12px 14px', background: '#fff', width: '100%' },
-  barOuter: { height: 10, borderRadius: 999, background: '#e5e7eb', overflow: 'hidden' },
-  barInner: { height: '100%', borderRadius: 999, background: 'linear-gradient(90deg,#2563eb,#06b6d4)' }
+const FILES: { key: FileKey; title: string; hint: string; headerRow?: number }[] = [
+  { key: "reservationList", title: "لیست رزرو.xlsx", hint: "لیست خام رزروها / درخواست‌ها" },
+  { key: "hotelData", title: "All Hotel Data(1).xlsx", hint: "Master هتل‌ها، Provider، شهر، دسته‌بندی" },
+  { key: "confirmedSales", title: "1405 Sale of confirmed reservations.xlsx", hint: "فروش رزروهای قطعی ۱۴۰۵" },
+  { key: "unconfirmedSales", title: "1405 Sale of unconfirmed reservations.xlsx", hint: "رزروهای قطعی نشده / از دست‌رفته" },
+  { key: "mehrMo", title: "Mehr Mo hotels.xlsx", hint: "فایل مهرمو با Header از ردیف سوم", headerRow: 2 },
+  { key: "assignment", title: "Hotel Assignment.xlsx", hint: "مسئول نرخ، ظرفیت، سیتی‌منیجر" },
+  { key: "traffic", title: "ترافیک بازدید سایت Analytics.xlsx", hint: "ترافیک، Session، View، Checkout" }
+];
+
+const initialData: Dataset = { reservationList: [], hotelData: [], confirmedSales: [], unconfirmedSales: [], mehrMo: [], assignment: [], traffic: [] };
+
+const s: Record<string, React.CSSProperties> = {
+  page: { minHeight: "100vh", direction: "rtl", background: "linear-gradient(180deg,#f6f8fc,#eef3f8)", color: "#0f172a", fontFamily: "Vazirmatn, IRANSans, Segoe UI, sans-serif" },
+  wrap: { maxWidth: 1480, margin: "0 auto", padding: 24 },
+  hero: { display: "grid", gridTemplateColumns: "1.35fr .8fr", gap: 18, alignItems: "stretch" },
+  panel: { background: "rgba(255,255,255,.94)", border: "1px solid #e5e7eb", borderRadius: 28, boxShadow: "0 18px 50px rgba(15,23,42,.07)", padding: 22 },
+  card: { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 22, padding: 18, boxShadow: "0 12px 32px rgba(15,23,42,.05)" },
+  grid4: { display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14 },
+  grid3: { display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14 },
+  grid2: { display: "grid", gridTemplateColumns: "1.1fr .9fr", gap: 16 },
+  h1: { margin: 0, fontSize: 31, fontWeight: 950, letterSpacing: "-.03em" },
+  muted: { color: "#64748b", lineHeight: 1.9 },
+  btn: { border: 0, borderRadius: 16, padding: "11px 15px", fontWeight: 900, cursor: "pointer", background: "#2563eb", color: "#fff", display: "inline-flex", alignItems: "center", gap: 8 },
+  ghost: { border: "1px solid #e5e7eb", borderRadius: 16, padding: "10px 14px", fontWeight: 900, cursor: "pointer", background: "#fff", color: "#0f172a", display: "inline-flex", alignItems: "center", gap: 8 },
+  input: { border: "1px solid #e5e7eb", borderRadius: 16, padding: "12px 14px", background: "#fff", width: "100%" },
+  table: { width: "100%", borderCollapse: "separate", borderSpacing: "0 10px", fontSize: 13 },
+  th: { color: "#64748b", fontWeight: 900, padding: "0 12px", textAlign: "right" },
+  td: { background: "#fff", borderTop: "1px solid #e5e7eb", borderBottom: "1px solid #e5e7eb", padding: 12, verticalAlign: "top" },
+  pill: { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 999, padding: "6px 10px", fontSize: 12, fontWeight: 950 },
+  barOuter: { height: 10, borderRadius: 999, background: "#e5e7eb", overflow: "hidden" },
+  barInner: { height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#2563eb,#06b6d4)" }
 };
 
-const uid = () => (globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random()}`);
-const norm = (s: any) => String(s ?? '').trim();
-const toNum = (v: any) => {
-  const n = Number(String(v ?? 0).replace(/[٬,\s]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-};
+const uid = () => globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random()}`;
+const norm = (v: any) => String(v ?? "").trim();
+const lower = (v: any) => norm(v).toLowerCase();
+const num = (v: any) => { const n = Number(String(v ?? 0).replace(/[٬,\s]/g, "").replace(/,/g, "")); return Number.isFinite(n) ? n : 0; };
+const has = (text: string, words: string[]) => words.some(w => text.includes(w.toLowerCase()));
 const pick = (row: any, names: string[]) => {
   const keys = Object.keys(row || {});
-  const found = keys.find(k => names.some(n => norm(k).toLowerCase() === n.toLowerCase() || norm(k).includes(n)));
-  return found ? row[found] : '';
+  const exact = keys.find(k => names.some(n => lower(k) === lower(n)));
+  const contains = keys.find(k => names.some(n => lower(k).includes(lower(n)) || lower(n).includes(lower(k))));
+  return row[exact || contains || ""] ?? "";
 };
-const isConfirmed = (row: any) => {
-  const text = `${pick(row, ['وضعیت', 'status', 'Confirm', 'confirmed'])} ${JSON.stringify(row)}`.toLowerCase();
-  return text.includes('تایید') || text.includes('confirmed') || text.includes('قطعی') || text.includes('success');
-};
+const hotelName = (row: any) => norm(pick(row, ["نام هتل", "هتل", "Hotel", "HotelName", "hotel_title", "عنوان هتل", "Name"])) || "نامشخص";
+const cityName = (row: any) => norm(pick(row, ["شهر", "City", "city", "نام شهر"])) || "";
+const statusText = (row: any) => `${pick(row, ["وضعیت", "Status", "status", "Confirm", "confirmed"])} ${JSON.stringify(row)}`.toLowerCase();
+const isConfirmed = (row: any) => has(statusText(row), ["تایید", "قطعی", "confirmed", "success", "ok"]);
+const isUnconfirmed = (row: any) => has(statusText(row), ["عدم", "تایید نشده", "ناموفق", "unconfirmed", "failed", "cancel", "کنسل"]);
+const money = (v: number) => v > 999999999 ? `${(v / 1_000_000_000).toFixed(1)}B` : v > 999999 ? `${(v / 1_000_000).toFixed(0)}M` : String(Math.round(v));
 
-const demoReservations: ReservationRow[] = [
-  { id: 'r-demo-1', hotel_title: 'هتل درویشی مشهد', city: 'مشهد', channel: 'B2C', status: 'تایید شده', confirmed: true, nights: 8, amount: 86000000, profit: 8600000, created_at: new Date().toISOString() },
-  { id: 'r-demo-2', hotel_title: 'هتل پارس مشهد', city: 'مشهد', channel: 'B2C', status: 'تایید نشده', confirmed: false, nights: 4, amount: 34000000, profit: 0, reason: 'عدم ظرفیت آنلاین', created_at: new Date().toISOString() },
-  { id: 'r-demo-3', hotel_title: 'هتل عباسی اصفهان', city: 'اصفهان', channel: 'B2B', status: 'تایید نشده', confirmed: false, nights: 2, amount: 24000000, profit: 0, reason: 'عدم رقابت نرخ', created_at: new Date().toISOString() }
-];
-const demoTraffic: TrafficRow[] = [
-  { id: 't-demo-1', hotel_title: 'هتل درویشی مشهد', city: 'مشهد', channel: 'Organic', sessions: 920, visitors: 710, searches: 380, room_views: 210, booking_starts: 46, reservations: 18 },
-  { id: 't-demo-2', hotel_title: 'هتل پارس مشهد', city: 'مشهد', channel: 'Paid', sessions: 740, visitors: 560, searches: 310, room_views: 170, booking_starts: 34, reservations: 5 },
-  { id: 't-demo-3', hotel_title: 'هتل عباسی اصفهان', city: 'اصفهان', channel: 'Organic', sessions: 620, visitors: 480, searches: 220, room_views: 130, booking_starts: 22, reservations: 3 }
-];
+async function readXlsx(file: File, headerRow = 0) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { defval: "", range: headerRow }) as any[];
+}
 
-function Metric({ title, value, sub, icon: Icon, tone = '#2563eb' }: any) {
-  return <div style={S.card}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-      <div><div style={{ color: '#64748b', fontWeight: 800, fontSize: 13 }}>{title}</div><div style={{ fontSize: 27, fontWeight: 950, marginTop: 6 }}>{value}</div></div>
-      <div style={{ width: 44, height: 44, borderRadius: 16, background: `${tone}18`, color: tone, display: 'grid', placeItems: 'center' }}><Icon size={22} /></div>
+function detectKey(fileName: string): FileKey | null {
+  const n = fileName.toLowerCase();
+  if (n.includes("all hotel data")) return "hotelData";
+  if (n.includes("confirmed")) return "confirmedSales";
+  if (n.includes("unconfirmed")) return "unconfirmedSales";
+  if (n.includes("mehr")) return "mehrMo";
+  if (n.includes("assignment")) return "assignment";
+  if (n.includes("analytics") || n.includes("traffic") || n.includes("ترافیک")) return "traffic";
+  if (n.includes("لیست") || n.includes("reserve") || n.includes("رزرو")) return "reservationList";
+  return null;
+}
+
+function Metric({ title, value, sub, icon: Icon, tone = "#2563eb" }: any) {
+  return <div style={s.card}>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+      <div><div style={{ color: "#64748b", fontWeight: 900, fontSize: 13 }}>{title}</div><div style={{ fontSize: 27, fontWeight: 950, marginTop: 6 }}>{value}</div></div>
+      <div style={{ width: 44, height: 44, borderRadius: 16, background: `${tone}18`, color: tone, display: "grid", placeItems: "center" }}><Icon size={22} /></div>
     </div>
-    <div style={{ ...S.muted, fontSize: 12, marginTop: 10 }}>{sub}</div>
+    <div style={{ ...s.muted, fontSize: 12, marginTop: 10 }}>{sub}</div>
   </div>;
 }
 
-function RiskPill({ risk }: { risk: number }) {
-  const color = risk >= 75 ? '#dc2626' : risk >= 50 ? '#f59e0b' : '#16a34a';
-  const bg = risk >= 75 ? '#fee2e2' : risk >= 50 ? '#fef3c7' : '#dcfce7';
-  return <span style={{ ...S.pill, background: bg, color }}>{risk >= 75 ? 'بحرانی' : risk >= 50 ? 'نیازمند پیگیری' : 'سالم'} · {risk}%</span>;
+function Risk({ risk }: { risk: number }) {
+  const color = risk >= 75 ? "#dc2626" : risk >= 50 ? "#d97706" : "#16a34a";
+  const bg = risk >= 75 ? "#fee2e2" : risk >= 50 ? "#fef3c7" : "#dcfce7";
+  return <span style={{ ...s.pill, background: bg, color }}>{risk >= 75 ? "بحرانی" : risk >= 50 ? "نیازمند پیگیری" : "سالم"} · {risk}%</span>;
 }
 
 export default function ReservationIntelligencePage() {
-  const [reservations, setReservations] = useState<ReservationRow[]>(demoReservations);
-  const [traffic, setTraffic] = useState<TrafficRow[]>(demoTraffic);
+  const [data, setData] = useState<Dataset>(initialData);
+  const [names, setNames] = useState<Record<FileKey, string>>({} as any);
+  const [aiPrompt, setAiPrompt] = useState("با توجه به فایل‌های آپلود شده، ۲۰ اقدام فوری امروز تیم Supply برای جلوگیری از از دست رفتن رزرو را بده.");
+  const [aiText, setAiText] = useState("");
   const [loadingAI, setLoadingAI] = useState(false);
-  const [aiText, setAiText] = useState('');
-  const [query, setQuery] = useState('برای مدیر تأمین، وضعیت رزروهای از دست‌رفته و اقدام‌های فوری را خلاصه کن.');
 
-  const insights = useMemo<HotelInsight[]>(() => {
-    const map: Record<string, HotelInsight> = {};
-    const ensure = (name: string, city = '') => map[name] || (map[name] = { hotel: name, city, confirmed: 0, unconfirmed: 0, requests: 0, nights: 0, amount: 0, profit: 0, sessions: 0, bookingStarts: 0, conversion: 0, trafficConversion: 0, risk: 0, reason: '' });
-    reservations.forEach(r => {
-      const h = ensure(r.hotel_title || 'نامشخص', r.city || '');
-      h.requests += 1; h.nights += r.nights || 0; h.amount += r.amount || 0; h.profit += r.profit || 0;
-      if (r.confirmed) h.confirmed += 1; else { h.unconfirmed += 1; h.reason = r.reason || r.status || h.reason || 'نیازمند بررسی'; }
+  async function importFile(file: File, forced?: FileKey) {
+    const key = forced || detectKey(file.name);
+    if (!key) return alert(`فایل شناسایی نشد: ${file.name}`);
+    const cfg = FILES.find(f => f.key === key)!;
+    const rows = await readXlsx(file, cfg.headerRow || 0);
+    setData(prev => ({ ...prev, [key]: rows }));
+    setNames(prev => ({ ...prev, [key]: file.name }));
+  }
+
+  async function importMany(files: FileList | null) {
+    if (!files) return;
+    for (const file of Array.from(files)) await importFile(file);
+  }
+
+  const insights = useMemo<Insight[]>(() => {
+    const map: Record<string, Insight> = {};
+    const ensure = (name: string, city = "") => map[name] || (map[name] = { hotel: name, city, category: "", provider: "", capacityOwner: "", rateOwner: "", confirmed: 0, unconfirmed: 0, requests: 0, nights: 0, sale: 0, profit: 0, sessions: 0, conversion: 0, trafficConversion: 0, risk: 0, reason: "" });
+
+    data.hotelData.forEach(r => {
+      const h = ensure(hotelName(r), cityName(r));
+      h.category = norm(pick(r, ["CaringCategory", "دسته بندی هتل", "دسته‌بندی", "Category"])) || h.category;
+      h.provider = norm(pick(r, ["نام پروایدر", "Provider", "provider"])) || h.provider;
     });
-    traffic.forEach(t => {
-      const h = ensure(t.hotel_title || 'نامشخص', t.city || '');
-      h.sessions += t.sessions || 0; h.bookingStarts += t.booking_starts || 0;
+
+    data.assignment.forEach(r => {
+      const h = ensure(hotelName(r), cityName(r));
+      h.capacityOwner = norm(pick(r, ["حامی ظرفیت", "مسئول ظرفیت", "capacity", "Task1", "تسک۱"])) || h.capacityOwner;
+      h.rateOwner = norm(pick(r, ["حامی نرخ", "مسئول نرخ", "rate", "Task2", "تسک۲"])) || h.rateOwner;
     });
+
+    const addReservation = (r: any, forced?: "confirmed" | "unconfirmed") => {
+      const h = ensure(hotelName(r), cityName(r));
+      h.requests += 1;
+      const confirmed = forced === "confirmed" || (!forced && isConfirmed(r));
+      const unconfirmed = forced === "unconfirmed" || (!confirmed && (isUnconfirmed(r) || true));
+      if (confirmed) h.confirmed += 1;
+      if (unconfirmed && !confirmed) h.unconfirmed += 1;
+      h.nights += num(pick(r, ["شب اقامت", "RoomNight", "nights", "تعداد شب", "شب"]));
+      h.sale += num(pick(r, ["مبلغ", "مبلغ رزرو", "فروش", "Gross", "Sale", "amount"]));
+      h.profit += num(pick(r, ["سود", "Profit", "margin", "سود هتل"]));
+      if (!confirmed && !h.reason) h.reason = norm(pick(r, ["دلیل", "علت", "Reason", "وضعیت"])) || "رزرو تایید نشده / نیازمند پیگیری";
+    };
+    data.reservationList.forEach(r => addReservation(r));
+    data.confirmedSales.forEach(r => addReservation(r, "confirmed"));
+    data.unconfirmedSales.forEach(r => addReservation(r, "unconfirmed"));
+
+    data.traffic.forEach(r => {
+      const h = ensure(hotelName(r), cityName(r));
+      h.sessions += num(pick(r, ["sessions", "Sessions", "نشست", "بازدید", "Users", "کاربر"]));
+    });
+
+    data.mehrMo.forEach(r => {
+      const h = ensure(hotelName(r), cityName(r));
+      if (!h.category) h.category = norm(pick(r, ["CaringCategory", "دسته", "Category"]));
+    });
+
     return Object.values(map).map(h => {
       h.conversion = h.requests ? Math.round((h.confirmed / h.requests) * 100) : 0;
       h.trafficConversion = h.sessions ? Number(((h.confirmed / h.sessions) * 100).toFixed(2)) : 0;
-      const lostPressure = h.unconfirmed * 16;
-      const trafficPressure = h.sessions > 300 && h.trafficConversion < 1.5 ? 30 : 0;
-      const conversionPressure = h.conversion < 45 ? 25 : h.conversion < 65 ? 12 : 0;
-      h.risk = Math.min(100, lostPressure + trafficPressure + conversionPressure);
-      if (!h.reason) h.reason = h.risk >= 50 ? 'ترافیک بالا / تبدیل پایین' : 'وضعیت قابل قبول';
+      const lostPressure = Math.min(45, h.unconfirmed * 8);
+      const conversionPressure = h.requests >= 3 && h.conversion < 45 ? 25 : h.conversion < 65 ? 12 : 0;
+      const trafficPressure = h.sessions >= 200 && h.trafficConversion < 1 ? 20 : 0;
+      const ownershipPressure = !h.capacityOwner || !h.rateOwner ? 10 : 0;
+      h.risk = Math.min(100, lostPressure + conversionPressure + trafficPressure + ownershipPressure);
+      if (!h.reason) h.reason = h.risk >= 60 ? "تبدیل پایین / رزرو از دست‌رفته" : "وضعیت قابل قبول";
       return h;
-    }).sort((a, b) => b.risk - a.risk || b.unconfirmed - a.unconfirmed);
-  }, [reservations, traffic]);
+    }).filter(h => h.hotel !== "نامشخص" || h.requests || h.sessions).sort((a, b) => b.risk - a.risk || b.unconfirmed - a.unconfirmed || b.sessions - a.sessions);
+  }, [data]);
 
   const totals = useMemo(() => {
-    const confirmed = reservations.filter(r => r.confirmed).length;
-    const unconfirmed = reservations.length - confirmed;
-    const amount = reservations.reduce((s, r) => s + (r.amount || 0), 0);
-    const lost = reservations.filter(r => !r.confirmed).reduce((s, r) => s + (r.amount || 0), 0);
-    const sessions = traffic.reduce((s, t) => s + (t.sessions || 0), 0);
-    const bookingStarts = traffic.reduce((s, t) => s + (t.booking_starts || 0), 0);
-    return { confirmed, unconfirmed, amount, lost, sessions, bookingStarts, conversion: reservations.length ? Math.round((confirmed / reservations.length) * 100) : 0, trafficConversion: sessions ? Number(((confirmed / sessions) * 100).toFixed(2)) : 0 };
-  }, [reservations, traffic]);
+    const confirmed = insights.reduce((a, h) => a + h.confirmed, 0);
+    const unconfirmed = insights.reduce((a, h) => a + h.unconfirmed, 0);
+    const sessions = insights.reduce((a, h) => a + h.sessions, 0);
+    const sale = insights.reduce((a, h) => a + h.sale, 0);
+    const risky = insights.filter(h => h.risk >= 60).length;
+    return { confirmed, unconfirmed, sessions, sale, risky, conversion: confirmed + unconfirmed ? Math.round((confirmed / (confirmed + unconfirmed)) * 100) : 0 };
+  }, [insights]);
 
-  async function importExcel(file: File, kind: 'reservation' | 'traffic') {
-    const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: 'array' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
-    if (kind === 'reservation') {
-      const mapped = rows.map(row => ({
-        id: uid(),
-        hotel_title: norm(pick(row, ['نام هتل', 'هتل', 'hotel', 'hotel_title'])) || 'نامشخص',
-        city: norm(pick(row, ['شهر', 'city'])),
-        channel: norm(pick(row, ['کانال', 'channel', 'source'])),
-        status: norm(pick(row, ['وضعیت', 'status'])) || (isConfirmed(row) ? 'تایید شده' : 'تایید نشده'),
-        confirmed: isConfirmed(row),
-        nights: toNum(pick(row, ['شب اقامت', 'nights', 'room_nights'])),
-        amount: toNum(pick(row, ['مبلغ', 'فروش', 'amount', 'gross_sales', 'sale'])),
-        profit: toNum(pick(row, ['سود', 'profit', 'margin'])),
-        reason: norm(pick(row, ['دلیل', 'reason', 'علت'])),
-        created_at: norm(pick(row, ['تاریخ', 'date', 'created_at'])) || new Date().toISOString(),
-        raw: row
-      }));
-      setReservations(mapped);
-      localStorage.setItem('ihos_reservation_rows', JSON.stringify(mapped));
-    } else {
-      const mapped = rows.map(row => ({
-        id: uid(),
-        hotel_title: norm(pick(row, ['نام هتل', 'هتل', 'hotel', 'hotel_title'])),
-        city: norm(pick(row, ['شهر', 'city'])),
-        channel: norm(pick(row, ['کانال', 'channel', 'source'])),
-        sessions: toNum(pick(row, ['sessions', 'نشست', 'session'])),
-        visitors: toNum(pick(row, ['users', 'visitors', 'کاربر', 'بازدیدکننده'])),
-        searches: toNum(pick(row, ['searches', 'جستجو'])),
-        room_views: toNum(pick(row, ['room_views', 'view', 'بازدید اتاق'])),
-        booking_starts: toNum(pick(row, ['booking_starts', 'شروع رزرو', 'begin_checkout'])),
-        reservations: toNum(pick(row, ['reservations', 'رزرو', 'purchase'])),
-        date: norm(pick(row, ['تاریخ', 'date'])),
-        raw: row
-      }));
-      setTraffic(mapped);
-      localStorage.setItem('ihos_site_traffic_rows', JSON.stringify(mapped));
-    }
-  }
-
-  function createTaskForHotel(h: HotelInsight) {
-    const task = { id: uid(), title: `پیگیری ریسک رزرو: ${h.hotel}`, hotel_title: h.hotel, city: h.city, priority: h.risk >= 75 ? 'فوری' : 'بالا', status: 'جدید', category: 'تحلیل رزرو', description: `ریسک ${h.risk}% · رزرو تاییدنشده ${h.unconfirmed} · تبدیل ${h.conversion}% · دلیل: ${h.reason}`, created_at: new Date().toISOString(), labels: ['تحلیل رزرو', 'ریسک'] };
-    const prev = JSON.parse(localStorage.getItem('ihos_tasks') || '[]');
-    localStorage.setItem('ihos_tasks', JSON.stringify([task, ...(Array.isArray(prev) ? prev : [])]));
-    alert('تسک در حافظه مرورگر ساخته شد و در همگام‌سازی بعدی قابل پیگیری است.');
+  function createTask(h: Insight) {
+    const task = { id: uid(), title: `پیگیری فوری رزروهای از دست‌رفته ${h.hotel}`, description: `ریسک ${h.risk}٪ - ${h.reason}. مسئول ظرفیت: ${h.capacityOwner || "نامشخص"}، مسئول نرخ: ${h.rateOwner || "نامشخص"}`, hotel_title: h.hotel, priority: h.risk >= 75 ? "فوری" : "بالا", status: "در انتظار انجام", created_at: new Date().toISOString() };
+    const old = JSON.parse(localStorage.getItem("ihos_tasks") || "[]");
+    localStorage.setItem("ihos_tasks", JSON.stringify([task, ...old]));
+    alert("تسک در Local Task Center ساخته شد. بعد از Sync، در تسک‌ها دیده می‌شود.");
   }
 
   function exportCsv() {
-    const headers = ['hotel', 'city', 'confirmed', 'unconfirmed', 'conversion', 'trafficConversion', 'risk', 'reason'];
-    const body = '\ufeff' + [headers.join(','), ...insights.map(r => headers.map(h => `"${String((r as any)[h] ?? '').replaceAll('"', '""')}"`).join(','))].join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([body], { type: 'text/csv;charset=utf-8' }));
-    a.download = 'reservation-risk-radar.csv';
-    a.click();
+    const rows = insights.map(h => ({ hotel: h.hotel, city: h.city, category: h.category, provider: h.provider, capacityOwner: h.capacityOwner, rateOwner: h.rateOwner, confirmed: h.confirmed, unconfirmed: h.unconfirmed, sessions: h.sessions, conversion: h.conversion, risk: h.risk, reason: h.reason }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Reservation Intelligence");
+    XLSX.writeFile(wb, "reservation-intelligence-risk-radar.xlsx");
   }
 
   async function askAI() {
-    setLoadingAI(true);
-    setAiText('');
+    setLoadingAI(true); setAiText("");
     try {
-      const res = await fetch('/api/avalai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: `${query}\n\nداده خلاصه:\n${JSON.stringify({ totals, topRisk: insights.slice(0, 10) }, null, 2)}` }) });
-      const data = await res.json();
-      setAiText(data.text || data.message || 'پاسخی دریافت نشد.');
-    } catch (e: any) {
-      setAiText(`خطا در ارتباط با Aval AI: ${e?.message || e}`);
-    } finally { setLoadingAI(false); }
+      const top = insights.slice(0, 30).map(h => `${h.hotel} | شهر:${h.city} | ریسک:${h.risk} | قطعی:${h.confirmed} | غیرقطعی:${h.unconfirmed} | ترافیک:${h.sessions} | مسئول ظرفیت:${h.capacityOwner || "-"} | مسئول نرخ:${h.rateOwner || "-"}`).join("\n");
+      const res = await fetch("/api/avalai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: `${aiPrompt}\n\nداده خلاصه:\n${top}` }) });
+      const json = await res.json();
+      setAiText(json.text || json.message || JSON.stringify(json));
+    } catch (e: any) { setAiText(e?.message || "خطا در Aval AI"); }
+    finally { setLoadingAI(false); }
   }
 
-  return <main style={S.page}>
-    <div style={S.shell}>
-      <section style={S.hero}>
-        <div style={{ ...S.panel, background: 'linear-gradient(135deg,#0f172a,#1d4ed8)', color: '#fff' }}>
-          <a href="/" style={{ color: '#bfdbfe', textDecoration: 'none', fontWeight: 900, display: 'inline-flex', alignItems: 'center', gap: 8 }}><ArrowRight size={18} /> برگشت به IranHotel OS Pro</a>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 28 }}><Sparkles /><span style={{ fontWeight: 900 }}>Reservation Intelligence Layer</span></div>
-          <h1 style={{ ...S.h1, fontSize: 38, marginTop: 10 }}>تحلیل داده رزرو روی نسخه پرو عملیات</h1>
-          <p style={{ ...S.muted, color: '#dbeafe', maxWidth: 760 }}>این ماژول به جای ساده‌کردن داشبورد اصلی، کنار سیستم Pro قرار گرفته و داده‌های رزرو قطعی، غیرقطعی و ترافیک سایت را به ریسک هتل، تسک عملیاتی و گزارش مدیریتی تبدیل می‌کند.</p>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 22 }}>
-            <label style={S.btn}><Upload size={18} /> ورود اکسل رزرو<input hidden type="file" accept=".xlsx,.xls,.csv" onChange={e => e.target.files?.[0] && importExcel(e.target.files[0], 'reservation')} /></label>
-            <label style={{ ...S.ghost, background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.22)' }}><Upload size={18} /> ورود اکسل ترافیک<input hidden type="file" accept=".xlsx,.xls,.csv" onChange={e => e.target.files?.[0] && importExcel(e.target.files[0], 'traffic')} /></label>
-            <button style={{ ...S.ghost, background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.22)' }} onClick={exportCsv}><Download size={18} /> خروجی ریسک</button>
+  return <main style={s.page}>
+    <div style={s.wrap}>
+      <section style={s.hero}>
+        <div style={s.panel}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}><span style={{ ...s.pill, background: "#dbeafe", color: "#1d4ed8" }}><Sparkles size={14}/> V8.2 Exact Upload Profile</span></div>
+          <h1 style={s.h1}>تحلیل داده رزرو براساس ساختار واقعی فایل‌های ایران‌هتل</h1>
+          <p style={s.muted}>این صفحه دقیقاً با همین ۷ فایل کار می‌کند: لیست رزرو، All Hotel Data، فروش قطعی، فروش غیرقطعی، Mehr Mo، Assignment و Analytics. فایل‌ها را یکجا یا جداگانه آپلود کن.</p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+            <label style={s.btn}><Upload size={17}/> آپلود یکجای همه فایل‌ها<input type="file" multiple accept=".xlsx,.xls" onChange={e => importMany(e.target.files)} style={{ display: "none" }}/></label>
+            <button style={s.ghost} onClick={exportCsv}><Download size={17}/> خروجی اکسل ریسک</button>
           </div>
         </div>
-        <div style={S.panel}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Brain color="#2563eb" /><b>فرمان مدیریتی پیشنهادی</b></div>
-          <p style={S.muted}>هر صبح این سه خروجی را چک کن: هتل‌های پرترافیک کم‌تبدیل، رزروهای تاییدنشده ارزشمند، و علت‌های تکرارشونده از دست رفتن رزرو.</p>
-          <div style={{ ...S.barOuter, marginTop: 18 }}><div style={{ ...S.barInner, width: `${Math.min(100, totals.conversion)}%` }} /></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, color: '#64748b', fontWeight: 800 }}><span>نرخ تبدیل رزرو</span><span>{totals.conversion}%</span></div>
+        <div style={s.panel}>
+          <b>وضعیت فایل‌ها</b>
+          <div style={{ display: "grid", gap: 8, marginTop: 12 }}>{FILES.map(f => <div key={f.key} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", padding: "9px 0", borderBottom: "1px solid #eef2f7" }}><span style={{ fontSize: 12 }}>{f.title}</span>{data[f.key].length ? <span style={{ ...s.pill, background: "#dcfce7", color: "#15803d" }}><CheckCircle2 size={13}/> {data[f.key].length}</span> : <span style={{ ...s.pill, background: "#f1f5f9", color: "#64748b" }}>خالی</span>}</div>)}</div>
         </div>
       </section>
 
-      <section style={{ ...S.grid4, marginTop: 16 }}>
-        <Metric title="رزرو تاییدشده" value={totals.confirmed.toLocaleString('fa-IR')} sub="از کل ورودی رزرو" icon={CheckCircle2} tone="#16a34a" />
-        <Metric title="رزرو تاییدنشده" value={totals.unconfirmed.toLocaleString('fa-IR')} sub="هدف اصلی برای نجات فروش" icon={AlertTriangle} tone="#dc2626" />
-        <Metric title="ارزش از دست‌رفته" value={totals.lost.toLocaleString('fa-IR')} sub="بر اساس مبلغ رزروهای غیرقطعی" icon={TrendingUp} tone="#f59e0b" />
-        <Metric title="تبدیل ترافیک به رزرو" value={`${totals.trafficConversion}%`} sub={`${totals.sessions.toLocaleString('fa-IR')} نشست سایت`} icon={BarChart3} tone="#2563eb" />
+      <section style={{ ...s.grid4, marginTop: 16 }}>
+        <Metric title="رزرو قطعی" value={totals.confirmed} sub="از فایل فروش قطعی و لیست رزرو" icon={CheckCircle2} tone="#16a34a" />
+        <Metric title="رزرو غیرقطعی" value={totals.unconfirmed} sub="فرصت‌های از دست‌رفته / نیازمند پیگیری" icon={AlertTriangle} tone="#dc2626" />
+        <Metric title="Conversion" value={`${totals.conversion}%`} sub="نسبت قطعی به کل درخواست‌های رزرو" icon={TrendingUp} tone="#2563eb" />
+        <Metric title="هتل پرریسک" value={totals.risky} sub={`فروش خوانده‌شده: ${money(totals.sale)}`} icon={Hotel} tone="#f59e0b" />
       </section>
 
-      <section style={{ ...S.grid2, marginTop: 16 }}>
-        <div style={S.panel}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 14 }}>
-            <div><h2 style={{ margin: 0, fontSize: 20 }}>Hotel Risk Radar رزروی</h2><div style={S.muted}>اولویت اقدام برای تیم تأمین بر اساس رزرو از دست‌رفته و ترافیک کم‌تبدیل</div></div>
-            <button style={S.ghost} onClick={() => { setReservations(demoReservations); setTraffic(demoTraffic); }}><RefreshCw size={17} /> داده نمونه</button>
-          </div>
-          <div style={{ overflowX: 'auto' }}><table style={S.table}><thead><tr><th style={S.th}>هتل</th><th style={S.th}>تبدیل</th><th style={S.th}>غیرقطعی</th><th style={S.th}>ترافیک</th><th style={S.th}>ریسک</th><th style={S.th}>اقدام</th></tr></thead><tbody>{insights.map(h => <tr key={h.hotel}><td style={{ ...S.td, borderRight: '1px solid #e5e7eb', borderRadius: '0 14px 14px 0' }}><b>{h.hotel}</b><div style={{ color: '#64748b', fontSize: 12 }}>{h.city || '—'} · {h.reason}</div></td><td style={S.td}>{h.conversion}%</td><td style={S.td}>{h.unconfirmed}</td><td style={S.td}>{h.sessions.toLocaleString('fa-IR')}</td><td style={S.td}><RiskPill risk={h.risk} /></td><td style={{ ...S.td, borderLeft: '1px solid #e5e7eb', borderRadius: '14px 0 0 14px' }}><button style={{ ...S.ghost, padding: '8px 10px' }} onClick={() => createTaskForHotel(h)}><ClipboardList size={16} /> تسک</button></td></tr>)}</tbody></table></div>
-        </div>
-
-        <div style={S.panel}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Bot color="#2563eb" /><h2 style={{ margin: 0, fontSize: 20 }}>Aval AI Assistant</h2></div>
-          <p style={S.muted}>خلاصه مدیریتی، علت‌یابی افت تبدیل، و پیشنهاد اقدام را از روی داده‌های همین صفحه تولید می‌کند.</p>
-          <textarea style={{ ...S.input, minHeight: 110, resize: 'vertical' }} value={query} onChange={e => setQuery(e.target.value)} />
-          <button style={{ ...S.btn, marginTop: 10 }} onClick={askAI} disabled={loadingAI}><Brain size={18} /> {loadingAI ? 'در حال تحلیل...' : 'تحلیل با Aval AI'}</button>
-          <div style={{ marginTop: 14, background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 18, padding: 14, minHeight: 140, whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>{aiText || 'هنوز تحلیلی ساخته نشده است.'}</div>
-        </div>
+      <section style={{ ...s.grid3, marginTop: 16 }}>
+        {FILES.map(f => <div key={f.key} style={s.card}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}><FileSpreadsheet size={20} color="#2563eb"/><b>{f.title}</b></div>
+          <p style={{ ...s.muted, fontSize: 12, minHeight: 42 }}>{f.hint}</p>
+          <label style={{ ...s.ghost, width: "100%", justifyContent: "center" }}><Upload size={16}/> آپلود همین فایل<input type="file" accept=".xlsx,.xls" onChange={e => e.target.files?.[0] && importFile(e.target.files[0], f.key)} style={{ display: "none" }}/></label>
+          {names[f.key] && <div style={{ ...s.muted, fontSize: 11, marginTop: 8 }}>فایل: {names[f.key]}</div>}
+        </div>)}
       </section>
 
-      <section style={{ ...S.grid3, marginTop: 16 }}>
-        <div style={S.card}><Hotel color="#2563eb" /><h3>اتصال به پروفایل هتل</h3><p style={S.muted}>خروجی این صفحه باید در مرحله بعد داخل پرونده هر هتل نمایش داده شود: رزروهای قطعی، غیرقطعی، قیف تبدیل، ریسک و پیشنهاد اقدام.</p></div>
-        <div style={S.card}><ClipboardList color="#2563eb" /><h3>تبدیل تحلیل به تسک</h3><p style={S.muted}>برای هر هتل پرریسک می‌توان تسک پیگیری ساخت تا در Task Center و KPI کارشناسان قابل ردیابی باشد.</p></div>
-        <div style={S.card}><BarChart3 color="#2563eb" /><h3>داشبورد مدیرعامل</h3><p style={S.muted}>KPIهای اصلی: رزرو نجات‌داده‌شده، ارزش فروش در خطر، نرخ تبدیل شهر/کانال/هتل و تیم مسئول پیگیری.</p></div>
+      <section style={{ ...s.grid2, marginTop: 16 }}>
+        <div style={s.panel}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}><h2 style={{ margin: 0 }}>Hotel Risk Radar</h2><span style={{ ...s.pill, background: "#eef2ff", color: "#3730a3" }}><BarChart3 size={14}/> {insights.length} هتل</span></div>
+          <div style={{ overflowX: "auto", marginTop: 12 }}><table style={s.table}><thead><tr><th style={s.th}>هتل</th><th style={s.th}>مسئول</th><th style={s.th}>رزرو</th><th style={s.th}>ترافیک</th><th style={s.th}>ریسک</th><th style={s.th}>اقدام</th></tr></thead><tbody>{insights.slice(0, 80).map(h => <tr key={h.hotel}><td style={s.td}><b>{h.hotel}</b><div style={{ ...s.muted, fontSize: 12 }}>{h.city || "-"} · {h.category || "بدون دسته"} · {h.provider || "Provider نامشخص"}</div></td><td style={s.td}><div>ظرفیت: {h.capacityOwner || "-"}</div><div>نرخ: {h.rateOwner || "-"}</div></td><td style={s.td}><b>{h.confirmed}</b> قطعی / <b>{h.unconfirmed}</b> غیرقطعی<div style={s.barOuter}><div style={{ ...s.barInner, width: `${Math.min(100, h.conversion)}%` }}/></div><small>{h.conversion}% تبدیل</small></td><td style={s.td}>{h.sessions || 0}<div style={{ ...s.muted, fontSize: 12 }}>{h.trafficConversion}% از ترافیک</div></td><td style={s.td}><Risk risk={h.risk}/><div style={{ ...s.muted, fontSize: 12, marginTop: 6 }}>{h.reason}</div></td><td style={s.td}><button style={s.ghost} onClick={() => createTask(h)}><ClipboardList size={15}/> تسک</button></td></tr>)}</tbody></table></div>
+        </div>
+
+        <div style={s.panel}>
+          <h2 style={{ marginTop: 0 }}>Aval AI Assistant</h2>
+          <p style={s.muted}>از Aval AI برای خلاصه مدیریتی، استخراج اقدام فوری و تحلیل علت افت تبدیل استفاده کن.</p>
+          <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} style={{ ...s.input, minHeight: 120, resize: "vertical" }}/>
+          <button style={{ ...s.btn, marginTop: 10 }} onClick={askAI} disabled={loadingAI}>{loadingAI ? <Loader2 size={16}/> : <Bot size={16}/>} تحلیل کن</button>
+          {aiText && <pre style={{ whiteSpace: "pre-wrap", background: "#0f172a", color: "#e5e7eb", borderRadius: 18, padding: 16, lineHeight: 1.9, marginTop: 12 }}>{aiText}</pre>}
+          <div style={{ ...s.card, marginTop: 14, background: "#f8fafc" }}><b><Users size={16}/> پیشنهاد عملیاتی</b><p style={s.muted}>بعد از آپلود فایل‌ها، ۸۰ هتل اول Radar را به‌صورت روزانه بین حامی ظرفیت، حامی نرخ و سیتی‌منیجر تقسیم کن. هر مورد پرریسک باید همان روز تسک و نتیجه تماس داشته باشد.</p></div>
+        </div>
       </section>
     </div>
   </main>;
