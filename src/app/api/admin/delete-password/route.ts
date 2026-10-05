@@ -1,0 +1,5 @@
+import {NextRequest,NextResponse} from 'next/server';
+import {createClient} from '@supabase/supabase-js';
+import {createHash,randomBytes} from 'crypto';
+function adminDb(){const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)throw new Error('Service Role تنظیم نشده است');return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})}
+export async function POST(req:NextRequest){try{const {password,actor}=await req.json();if(!actor?.isSuperAdmin)return NextResponse.json({error:'فقط سوپر ادمین مجاز است'},{status:403});if(typeof password!=='string'||password.length<8)return NextResponse.json({error:'رمز حداقل ۸ کاراکتر باشد'},{status:400});const salt=randomBytes(16).toString('hex');const hash=createHash('sha256').update(`${salt}:${password}`).digest('hex');const db=adminDb();const {error}=await db.from('ihos_settings').upsert({key:'super_admin_delete_password',value:{salt,hash},updated_at:new Date().toISOString()});if(error)throw error;return NextResponse.json({ok:true})}catch(e:any){return NextResponse.json({error:e.message||'خطا'},{status:500})}}

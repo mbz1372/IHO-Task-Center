@@ -1,38 +1,54 @@
-# IranHotel OS — Reservation Intelligence V8
+# IHO Task Center V8.1 — Pro Merge + Reservation Intelligence
 
-این نسخه برای پروژه «تحلیل داده رزرو» ساخته شده و روی Vercel + Supabase اجرا می‌شود.
+این نسخه، اشتباه V8 Basic را اصلاح می‌کند: پایه محصول دوباره همان نسخه Pro / V23 عملیاتی است و تحلیل داده رزرو به‌عنوان یک ماژول جدید به آن اضافه شده، نه جایگزین داشبورد اصلی.
 
-## امکانات اصلی
-- تحلیل رزرو تایید شده و تایید نشده
-- قیف تبدیل از ترافیک سایت تا رزرو
-- Hotel Risk Radar
-- Hotel CRM و پروفایل هتل
-- Task Center عملیاتی با Assign کارشناس
-- Import اکسل برای Hotels / Reservations / Traffic
-- Aval AI Assistant با API Route امن
-- Realtime با Supabase و Chrome Notification
+## پایه حفظ‌شده از نسخه Pro
 
-## Environment Variables در Vercel
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
-AVALAI_API_KEY=...
-AVALAI_MODEL=gpt-4o-mini
-# optional
-AVALAI_BASE_URL=https://api.avalai.ir/v1/chat/completions
+- داشبورد اصلی عملیات زنجیره تأمین
+- Hotel CRM و پرونده عملیاتی هتل
+- KPI کارشناسان و گزارش کار ساخت‌یافته
+- Provider / Rate / Capacity / Contract / Cash-flow
+- گزارش‌های عملیاتی، مانع‌ها، گردش‌کارها و Realtime fallback
+- ساختار Supabase و Migrationهای قبلی نسخه Pro
+
+## ماژول جدید
+
+مسیر جدید:
+
+```text
+/reservation-intelligence
 ```
 
-## Supabase
-ابتدا `src/app/schema.sql` را در SQL Editor اجرا کنید.
+امکانات ماژول تحلیل رزرو:
 
-برای Realtime در Supabase:
-Database > Replication > جدول‌های ihos_* را فعال کنید.
+- Import اکسل رزروهای قطعی و غیرقطعی
+- Import اکسل ترافیک سایت Analytics
+- قیف تبدیل ترافیک تا رزرو
+- تشخیص هتل‌های پرترافیک ولی کم‌تبدیل
+- محاسبه ریسک رزروی هر هتل
+- ساخت تسک پیگیری از روی تحلیل
+- خروجی CSV مدیریتی
+- Aval AI Assistant برای تحلیل و پیشنهاد اقدام
 
-## ورود اولیه
-username: `admin`
-password: `123456`
+## Environment Variables
 
-## Deploy
-- GitHub را به Vercel وصل کنید.
-- Node.js 24.x
-- Redeploy without cache بعد از تغییرات بزرگ.
+```env
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+AVALAI_API_KEY=...
+AVALAI_MODEL=gpt-4o-mini
+AVALAI_BASE_URL=https://api.avalai.ir/v1
+```
+
+## راه‌اندازی
+
+1. فایل‌های Migration قبلی نسخه Pro را حفظ کنید.
+2. برای جداول رزرو، فایل زیر را در Supabase اجرا کنید:
+
+```text
+database/SUPABASE-V8-RESERVATION-INTELLIGENCE.sql
+```
+
+3. در Vercel گزینه `Redeploy without cache` را اجرا کنید.
+
+ورود اولیه طبق نسخه قبلی باقی می‌ماند.
