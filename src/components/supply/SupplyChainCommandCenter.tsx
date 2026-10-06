@@ -15,6 +15,7 @@ type Props={
   onCreateTask?:(hotel:any,input?:any)=>void;onOpenHotelImport?:()=>void;
   onImportExperts?:(file:File)=>Promise<void>;onImportAssignments?:(file:File)=>Promise<void>;
 };
+type ExactFileSlot={key:string;name:string;title:string;desc:string;required:boolean;icon:any;kind:string};
 
 const fa=(value:number)=>Number(value||0).toLocaleString('fa-IR');
 const percent=(part:number,total:number)=>Math.round(part/Math.max(1,total)*100);
@@ -23,6 +24,17 @@ const asNumber=(value:any)=>{const n=Number(String(value??'').replace(/[٬,]/g,'
 const dateOnly=(value:any)=>String(value||'').slice(0,10);
 const daysUntil=(value:any)=>{const time=new Date(`${dateOnly(value)}T12:00:00`).getTime();return Number.isFinite(time)?Math.ceil((time-Date.now())/86400000):99999};
 const providerKey=(value:any)=>normalizeFa(value||'IHO Provider');
+const rawText=(value:any)=>String(value??'').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim();
+
+const EXACT_FILE_SLOTS:ExactFileSlot[]=[
+  {key:'reserveList',name:'لیست رزرو.xlsx',title:'لیست رزرو.xlsx',desc:'ریز همه رزروها؛ مبنای قیف، Lost و ساخت تسک پیگیری',required:true,icon:FileSpreadsheet,kind:'reservation'},
+  {key:'hotelData',name:'All Hotel Data(1).xlsx',title:'All Hotel Data(1).xlsx',desc:'Master هتل‌ها؛ شهر، Provider، قرارداد، ظرفیت، دوره خرید و پرداخت',required:true,icon:Hotel,kind:'hotel'},
+  {key:'confirmed',name:'1405 Sale of confirmed reservations.xlsx',title:'1405 Sale of confirmed reservations.xlsx',desc:'رزروهای قطعی؛ فروش، شب‌اقامت، سود و نرخ قطعیت',required:true,icon:CheckCircle2,kind:'confirmed'},
+  {key:'unconfirmed',name:'1405 Sale of unconfirmed reservations.xlsx',title:'1405 Sale of unconfirmed reservations.xlsx',desc:'رزروهای غیرقطعی؛ Lost، دلیل‌های عدم تبدیل و اقدام فوری',required:true,icon:AlertTriangle,kind:'unconfirmed'},
+  {key:'mehr',name:'Mehr Mo hotels.xlsx',title:'Mehr Mo hotels.xlsx',desc:'فایل مکمل مهر؛ اولویت‌ها و وضعیت‌های عملیاتی ویژه',required:false,icon:Target,kind:'mehr'},
+  {key:'assignment',name:'Hotel Assignment.xlsx',title:'Hotel Assignment.xlsx',desc:'مالکیت کارشناسان؛ مسئول ظرفیت، نرخ و سیتی‌منیجر',required:true,icon:Users2,kind:'assignment'},
+  {key:'traffic',name:'ترافیک بازدید سایت Analytics.xlsx',title:'ترافیک بازدید سایت Analytics.xlsx',desc:'ترافیک و قیف تبدیل؛ بازدید، شروع رزرو، تبدیل و افت',required:true,icon:BarChart3,kind:'traffic'},
+];
 
 const FINANCIAL_LEVELS=[
   {level:'A+',min:25,max:999,title:'Strategic Cash-flow',tone:'excellent'},
@@ -49,6 +61,16 @@ function channelValue(row:any,key:'rate'|'capacity'){
   if(key==='rate')return row.rate_online!==false&&(row.rate_online===true||coverage.includes('نرخ'));
   return row.capacity_online!==false&&(row.capacity_online===true||coverage.includes('ظرفیت'));
 }
+function pickValue(row:any,names:string[]){
+  const key=Object.keys(row||{}).find(k=>names.some(name=>normalizeFa(k)===normalizeFa(name)||normalizeFa(k).includes(normalizeFa(name))));
+  return key?row[key]:'';
+}
+function buildRowsFromMatrix(matrix:any[][],slot:ExactFileSlot){
+  let headerIndex=slot.key==='mehr'?2:matrix.findIndex(row=>row.filter(cell=>rawText(cell)).length>=3&&row.some(cell=>/هتل|hotel|رزرو|reservation|city|شهر|تاریخ|date/i.test(rawText(cell))));
+  if(headerIndex<0)headerIndex=0;
+  const headers=(matrix[headerIndex]||[]).map((cell:any,index:number)=>rawText(cell)||`col_${index+1}`);
+  return matrix.slice(headerIndex+1).filter(row=>row.some(cell=>rawText(cell))).map(row=>Object.fromEntries(headers.map((h:string,index:number)=>[h,row[index]??''])));
+}
 
 export default function SupplyChainCommandCenter({hotels=[],tasks=[],users=[],me,setView,onCreateTask,onOpenHotelImport,onImportExperts,onImportAssignments}:Props){
   const [tab,setTab]=useState<Tab>('overview');
@@ -56,6 +78,8 @@ export default function SupplyChainCommandCenter({hotels=[],tasks=[],users=[],me
   const [automation,setAutomation]=useState<any[]>([]),[rules,setRules]=useState<any[]>([]),[coverage,setCoverage]=useState<any[]>([]);
   const [assignments,setAssignments]=useState<any[]>([]),[profiles,setProfiles]=useState<any[]>([]),[reports,setReports]=useState<any[]>([]);
   const [sales,setSales]=useState<any[]>([]),[blockers,setBlockers]=useState<any[]>([]),[settings,setSettings]=useState({capacityMinutes:12,rateMinutes:8,capacityWeight:65,rateWeight:35});
+  const [exactFiles,setExactFiles]=useState<any[]>([]);
+  const exactInputs=useRef<Record<string,HTMLInputElement|null>>({});
   const expertInput=useRef<HTMLInputElement>(null),assignmentInput=useRef<HTMLInputElement>(null),salesInput=useRef<HTMLInputElement>(null);
 
   async function refresh(){
@@ -69,6 +93,8 @@ export default function SupplyChainCommandCenter({hotels=[],tasks=[],users=[],me
       const rows=(index:number)=>results[index].status==='fulfilled'?(results[index] as PromiseFulfilledResult<any[]>).value:[];
       setAutomation(rows(0));setRules(rows(1));setCoverage(rows(2));setAssignments(rows(3));setProfiles(rows(4));setReports(rows(5));setSales(rows(6));setBlockers(rows(7));
       const config=new Map(rows(8).map((item:any)=>[item.key,item.value]));
+      const fileState=config.get('supply_exact_data_files');
+      setExactFiles(Array.isArray(fileState)?fileState:[]);
       setSettings(current=>({
         capacityMinutes:asNumber(config.get('supply_manual_capacity_minutes'))||current.capacityMinutes,
         rateMinutes:asNumber(config.get('supply_manual_rate_minutes'))||current.rateMinutes,
@@ -169,6 +195,43 @@ export default function SupplyChainCommandCenter({hotels=[],tasks=[],users=[],me
     if(!file||!runner)return;setNotice(`در حال اعمال ${label}...`);
     try{await runner(file);setNotice(`${label} با موفقیت اعمال شد`);await refresh()}catch(e:any){setNotice(`${label} ناموفق بود: ${e.message}`)}
   }
+  async function importExactFile(slot:ExactFileSlot,file:File|undefined){
+    if(!file)return;
+    setNotice(`در حال خواندن ${slot.name}...`);
+    try{
+      const XLSX=await import('xlsx');
+      const wb=XLSX.read(await file.arrayBuffer(),{type:'array',raw:false});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const matrix=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false}) as any[][];
+      const rows=buildRowsFromMatrix(matrix,slot);
+      if(!rows.length)throw new Error('هیچ ردیف معتبری در فایل پیدا نشد');
+      const importId=`exact-${slot.key}-${Date.now()}`;
+      const createdAt=nowIso();
+      const normalizedRows=rows.map((row,index)=>({
+        id:`${importId}-${index+1}`,
+        import_id:importId,
+        file_key:slot.key,
+        file_name:slot.name,
+        uploaded_file_name:file.name,
+        row_index:index+1,
+        hotel_code:rawText(pickValue(row,['کد هتل','hotel code','hotel_code','HotelId','Hotel ID'])),
+        hotel_title:rawText(pickValue(row,['نام هتل','هتل','hotel','hotel name','HotelName'])),
+        city:rawText(pickValue(row,['شهر','city'])),
+        payload:row,
+        created_at:createdAt,
+        updated_at:createdAt
+      }));
+      const run={id:importId,file_key:slot.key,file_name:slot.name,uploaded_file_name:file.name,rows_count:rows.length,required:slot.required,created_at:createdAt,updated_at:createdAt};
+      await saveRows('ihos_supply_import_runs',[run]);
+      await saveRows('ihos_supply_import_rows',normalizedRows);
+      const next=[...exactFiles.filter(item=>item.key!==slot.key),{key:slot.key,name:slot.name,fileName:file.name,rows:rows.length,ok:true,uploadedAt:createdAt}];
+      await saveSetting('supply_exact_data_files',next);
+      setExactFiles(next);
+      if(slot.key==='assignment'&&onImportAssignments)try{await onImportAssignments(file)}catch{}
+      setNotice(`${slot.name}: ${fa(rows.length)} ردیف در Supabase ذخیره شد و برای تحلیل‌های بعدی آماده است.`);
+      await refresh();
+    }catch(e:any){setNotice(`${slot.name} ناموفق بود: ${e.message}`)}
+  }
   async function importSales(file:File){
     setNotice('در حال خواندن داده فروش...');
     try{
@@ -228,14 +291,9 @@ export default function SupplyChainCommandCenter({hotels=[],tasks=[],users=[],me
     </section>}
 
     {tab==='data'&&<section className="supplyGridV23">
-      <article className="supplyPanelV23 span2"><PanelHead eyebrow="DATA INBOX" title="ورود فایل‌های عملیاتی"/><div className="dataImportGridV23">
-        <ImportCard icon={Building2} title="All Hotel Data" text="اطلاعات پایه، همکاری، قرارداد، دوره خرید و پرداخت" action="ورود فایل هتل‌ها" onClick={onOpenHotelImport}/>
-        <ImportCard icon={Users2} title="فایل کارشناسان" text="کاربران، دپارتمان، نقش، عکس و اطلاعات تماس" action="ورود کارشناسان" onClick={()=>expertInput.current?.click()}/>
-        <ImportCard icon={Workflow} title="تخصیص نرخ و ظرفیت" text="A نام هتل، B taskId و C نام کارشناس؛ ۱ ظرفیت و ۲ نرخ" action="ورود تخصیص‌ها" onClick={()=>assignmentInput.current?.click()}/>
-        <ImportCard icon={BarChart3} title="فروش و شب اقامت" text="رزرو قطعی و غیرقطعی، شب اقامت، فروش و مارجین" action="ورود داده فروش" onClick={()=>salesInput.current?.click()}/>
-        <ImportCard icon={Wifi} title="هتل‌های Provider" text="نام و کد هتل هر Provider، قابلیت نرخ و ظرفیت و اولویت" action="مدیریت Providerها" onClick={()=>setView?.('hotelSuperApp')}/>
-        <ImportCard icon={FileSpreadsheet} title="گزارش کار" text="ورود سریع در اپ؛ خروجی قابل تحلیل و جایگزین Google Sheet" action="رفتن به گزارش کار" onClick={()=>setView?.('workReports')}/>
-      </div><input ref={expertInput} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>void handleImport(e.target.files?.[0],onImportExperts,'فایل کارشناسان')}/><input ref={assignmentInput} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>void handleImport(e.target.files?.[0],onImportAssignments,'تخصیص کارشناسان')}/><input ref={salesInput} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>{const file=e.target.files?.[0];if(file)void importSales(file)}}/></article>
+      <article className="supplyPanelV23 span2"><PanelHead eyebrow="DATA INBOX" title="ورود ۷ فایل واقعی تحلیل رزرو و زنجیره تأمین"/><div className="dataImportGridV23">
+        {EXACT_FILE_SLOTS.map(slot=>{const state=exactFiles.find(item=>item.key===slot.key);const Icon=slot.icon;return <button key={slot.key} className={`importCardV23 ${state?.ok?'ready':''}`} onClick={()=>exactInputs.current[slot.key]?.click()}><i><Icon/></i><span><b>{slot.title}</b><small>{slot.desc}</small><em>{state?.ok?`آپلود شده · ${fa(state.rows)} ردیف`:(slot.required?'الزامی · انتخاب فایل':'اختیاری · انتخاب فایل')}</em></span><Upload/></button>})}
+      </div><p className="formulaNoteV23">این بخش جایگزین فلو قدیمی Upload است. هر فایل با نام واقعی خودش ذخیره می‌شود، وضعیتش در Supabase نگهداری می‌شود و داده خام برای داشبورد، CRM، KPI، Task Center و QA قابل استفاده می‌ماند.</p>{EXACT_FILE_SLOTS.map(slot=><input key={slot.key} ref={el=>{exactInputs.current[slot.key]=el}} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>void importExactFile(slot,e.target.files?.[0])}/>)}</article>
       <article className="supplyPanelV23"><PanelHead eyebrow="CALCULATION" title="تنظیم مدل آنلاین و بار کاری"/><div className="supplySettingsV23"><label>وزن ظرفیت (%)<input type="number" min="0" max="100" value={settings.capacityWeight} onChange={e=>setSettings({...settings,capacityWeight:asNumber(e.target.value),rateWeight:Math.max(0,100-asNumber(e.target.value))})}/></label><label>وزن نرخ (%)<input type="number" min="0" max="100" value={settings.rateWeight} onChange={e=>setSettings({...settings,rateWeight:asNumber(e.target.value),capacityWeight:Math.max(0,100-asNumber(e.target.value))})}/></label><label>دقیقه هفتگی هر ظرفیت دستی<input type="number" min="1" value={settings.capacityMinutes} onChange={e=>setSettings({...settings,capacityMinutes:asNumber(e.target.value)})}/></label><label>دقیقه هفتگی هر نرخ دستی<input type="number" min="1" value={settings.rateMinutes} onChange={e=>setSettings({...settings,rateMinutes:asNumber(e.target.value)})}/></label><button className="btn primary full" onClick={saveSupplySettings}><Settings2/> ذخیره مدل محاسبات</button></div></article>
     </section>}
   </div>
