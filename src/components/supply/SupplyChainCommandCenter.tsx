@@ -2,85 +2,115 @@
 
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {
-  Activity,AlertTriangle,ArrowLeftRight,BarChart3,Building2,CalendarClock,CheckCircle2,
-  CircleDollarSign,Database,FileSpreadsheet,Gauge,Hotel,RefreshCcw,Settings2,ShieldAlert,
-  Sparkles,Target,Upload,Users2,Wifi,Workflow
+  AlertTriangle,ArrowLeftRight,BarChart3,Bot,Building2,CalendarClock,CheckCircle2,
+  CircleDollarSign,Database,Download,FileSpreadsheet,Gauge,Hotel,ListChecks,RefreshCcw,
+  Search,Settings2,ShieldAlert,Sparkles,Target,Upload,Users2,Wifi,Workflow
 } from 'lucide-react';
 import {DEFAULT_PROVIDER_RULES} from '@/lib/superapp/automation';
 import {loadRows,makeId,normalizeFa,nowIso,saveRows,saveSetting} from './storage';
 
-type Tab='overview'|'online'|'financial'|'performance'|'data';
+type Tab='dashboard'|'inbox'|'hotels'|'profile'|'team'|'tasks'|'exports'|'ai';
 type Props={
   hotels?:any[];tasks?:any[];users?:any[];me?:any;setView?:(view:any)=>void;
   onCreateTask?:(hotel:any,input?:any)=>void;onOpenHotelImport?:()=>void;
   onImportExperts?:(file:File)=>Promise<void>;onImportAssignments?:(file:File)=>Promise<void>;
 };
-type ExactFileSlot={key:string;name:string;title:string;desc:string;required:boolean;icon:any;kind:string};
+type ExactFileSlot={key:string;name:string;title:string;desc:string;required:boolean;icon:any;kind:string;table:string};
+
+type HotelInsight={
+  id:string;key:string;hotel_code?:string;title:string;city?:string;province?:string;provider?:string;caring_category?:string;
+  cooperation_status?:string;site_visible?:boolean;search_visible?:boolean;capacity_total?:number;purchase_period?:number;payment_period?:number;
+  capacity_owner?:string;rate_owner?:string;city_owner?:string;confirmed:number;unconfirmed:number;reserveRows:number;nights:number;gross:number;margin:number;
+  traffic:number;conversion:number;risk:number;opportunity:number;health:number;reasons:string[];actions:string[];openTasks:number;doneTasks:number;lastEvent?:any;events:any[];
+};
 
 const fa=(value:number)=>Number(value||0).toLocaleString('fa-IR');
 const percent=(part:number,total:number)=>Math.round(part/Math.max(1,total)*100);
-const isDone=(value:any)=>['انجام شد','بسته شده','تایید شده'].includes(String(value||''));
-const asNumber=(value:any)=>{const n=Number(String(value??'').replace(/[٬,]/g,''));return Number.isFinite(n)?n:0};
+const clamp=(n:number,min=0,max=100)=>Math.max(min,Math.min(max,Math.round(n||0)));
+const isDone=(value:any)=>['انجام شد','بسته شده','تایید شده','done','closed','approved'].includes(normalizeFa(value));
+const asNumber=(value:any)=>{const n=Number(String(value??'').replace(/[٬,\s]/g,'').replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString()));return Number.isFinite(n)?n:0};
 const dateOnly=(value:any)=>String(value||'').slice(0,10);
-const daysUntil=(value:any)=>{const time=new Date(`${dateOnly(value)}T12:00:00`).getTime();return Number.isFinite(time)?Math.ceil((time-Date.now())/86400000):99999};
-const providerKey=(value:any)=>normalizeFa(value||'IHO Provider');
+const daysUntil=(value:any)=>{const raw=dateOnly(value);if(!raw)return 99999;const time=new Date(`${raw}T12:00:00`).getTime();return Number.isFinite(time)?Math.ceil((time-Date.now())/86400000):99999};
 const rawText=(value:any)=>String(value??'').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim();
+const keyText=(value:any)=>normalizeFa(value).replace(/[\s\-_/()（）.]/g,'');
+const hotelKey=(code?:any,title?:any)=>{const c=keyText(code);if(c)return `code:${c}`;const t=keyText(title);return t?`title:${t}`:''};
+const hotelTitleKey=(title?:any)=>keyText(title)?`title:${keyText(title)}`:'';
 
 const EXACT_FILE_SLOTS:ExactFileSlot[]=[
-  {key:'reserveList',name:'لیست رزرو.xlsx',title:'لیست رزرو.xlsx',desc:'ریز همه رزروها؛ مبنای قیف، Lost و ساخت تسک پیگیری',required:true,icon:FileSpreadsheet,kind:'reservation'},
-  {key:'hotelData',name:'All Hotel Data(1).xlsx',title:'All Hotel Data(1).xlsx',desc:'Master هتل‌ها؛ شهر، Provider، قرارداد، ظرفیت، دوره خرید و پرداخت',required:true,icon:Hotel,kind:'hotel'},
-  {key:'confirmed',name:'1405 Sale of confirmed reservations.xlsx',title:'1405 Sale of confirmed reservations.xlsx',desc:'رزروهای قطعی؛ فروش، شب‌اقامت، سود و نرخ قطعیت',required:true,icon:CheckCircle2,kind:'confirmed'},
-  {key:'unconfirmed',name:'1405 Sale of unconfirmed reservations.xlsx',title:'1405 Sale of unconfirmed reservations.xlsx',desc:'رزروهای غیرقطعی؛ Lost، دلیل‌های عدم تبدیل و اقدام فوری',required:true,icon:AlertTriangle,kind:'unconfirmed'},
-  {key:'mehr',name:'Mehr Mo hotels.xlsx',title:'Mehr Mo hotels.xlsx',desc:'فایل مکمل مهر؛ اولویت‌ها و وضعیت‌های عملیاتی ویژه',required:false,icon:Target,kind:'mehr'},
-  {key:'assignment',name:'Hotel Assignment.xlsx',title:'Hotel Assignment.xlsx',desc:'مالکیت کارشناسان؛ مسئول ظرفیت، نرخ و سیتی‌منیجر',required:true,icon:Users2,kind:'assignment'},
-  {key:'traffic',name:'ترافیک بازدید سایت Analytics.xlsx',title:'ترافیک بازدید سایت Analytics.xlsx',desc:'ترافیک و قیف تبدیل؛ بازدید، شروع رزرو، تبدیل و افت',required:true,icon:BarChart3,kind:'traffic'},
+  {key:'reserveList',name:'لیست رزرو.xlsx',title:'لیست رزرو.xlsx',desc:'ریز همه رزروها؛ مبنای قیف، Lost و ساخت تسک پیگیری',required:true,icon:FileSpreadsheet,kind:'reservation',table:'ihos_supply_reservation_list'},
+  {key:'hotelData',name:'All Hotel Data(1).xlsx',title:'All Hotel Data(1).xlsx',desc:'Master هتل‌ها؛ شهر، Provider، قرارداد، ظرفیت، دوره خرید و پرداخت',required:true,icon:Hotel,kind:'hotel',table:'ihos_supply_uploaded_hotels'},
+  {key:'confirmed',name:'1405 Sale of confirmed reservations.xlsx',title:'1405 Sale of confirmed reservations.xlsx',desc:'رزروهای قطعی؛ فروش، شب‌اقامت، سود و نرخ قطعیت',required:true,icon:CheckCircle2,kind:'confirmed',table:'ihos_supply_confirmed_sales'},
+  {key:'unconfirmed',name:'1405 Sale of unconfirmed reservations.xlsx',title:'1405 Sale of unconfirmed reservations.xlsx',desc:'رزروهای غیرقطعی؛ Lost، دلیل‌های عدم تبدیل و اقدام فوری',required:true,icon:AlertTriangle,kind:'unconfirmed',table:'ihos_supply_unconfirmed_sales'},
+  {key:'mehr',name:'Mehr Mo hotels.xlsx',title:'Mehr Mo hotels.xlsx',desc:'فایل مکمل مهر؛ اولویت‌ها و وضعیت‌های عملیاتی ویژه',required:false,icon:Target,kind:'mehr',table:'ihos_supply_mehr_mo'},
+  {key:'assignment',name:'Hotel Assignment.xlsx',title:'Hotel Assignment.xlsx',desc:'مالکیت کارشناسان؛ مسئول ظرفیت، نرخ و سیتی‌منیجر',required:true,icon:Users2,kind:'assignment',table:'ihos_supply_hotel_assignments'},
+  {key:'traffic',name:'ترافیک بازدید سایت Analytics.xlsx',title:'ترافیک بازدید سایت Analytics.xlsx',desc:'ترافیک و قیف تبدیل؛ بازدید، شروع رزرو، تبدیل و افت',required:true,icon:BarChart3,kind:'traffic',table:'ihos_supply_analytics_traffic'},
 ];
 
 const FINANCIAL_LEVELS=[
-  {level:'A+',min:25,max:999,title:'Strategic Cash-flow',tone:'excellent'},
-  {level:'A',min:18,max:24,title:'High Cash-flow',tone:'excellent'},
-  {level:'A-',min:15,max:17,title:'Good Cash-flow',tone:'good'},
-  {level:'B+',min:10,max:14,title:'Medium Cash-flow',tone:'good'},
-  {level:'B',min:7,max:9,title:'Limited Cash-flow',tone:'warn'},
-  {level:'B-',min:1,max:6,title:'Low Cash-flow',tone:'warn'},
-  {level:'D',min:0,max:0,title:'Same-day Settlement',tone:'bad'},
+  {level:'A+',min:25,max:999,title:'Strategic Cash-flow'},
+  {level:'A',min:18,max:24,title:'High Cash-flow'},
+  {level:'A-',min:15,max:17,title:'Good Cash-flow'},
+  {level:'B+',min:10,max:14,title:'Medium Cash-flow'},
+  {level:'B',min:7,max:9,title:'Limited Cash-flow'},
+  {level:'B-',min:1,max:6,title:'Low Cash-flow'},
+  {level:'D',min:0,max:0,title:'Same-day Settlement'},
 ] as const;
 
 function financialClass(hotel:any,profile?:any){
   const settlement=normalizeFa(profile?.settlement_model||profile?.contract_financial_type||'');
-  if(settlement.includes('به محض')||settlement.includes('رزرو')&&settlement.includes('فوری'))return{level:'F',title:'Immediate Payment',days:null,tone:'critical'};
+  if(settlement.includes('به محض')||settlement.includes('رزرو')&&settlement.includes('فوری'))return{level:'F',title:'Immediate Payment',days:null};
   const purchase=asNumber(profile?.purchase_days??hotel?.purchase_period);
   const payment=asNumber(profile?.payment_days??hotel?.payment_period);
   const days=purchase/2+payment;
   const found=days>=25?FINANCIAL_LEVELS[0]:days>=18?FINANCIAL_LEVELS[1]:days>=15?FINANCIAL_LEVELS[2]:days>=10?FINANCIAL_LEVELS[3]:days>=7?FINANCIAL_LEVELS[4]:days>0?FINANCIAL_LEVELS[5]:FINANCIAL_LEVELS[6];
   return{...found,days};
 }
-
 function channelValue(row:any,key:'rate'|'capacity'){
   const coverage=normalizeFa(row.coverage_type);
   if(key==='rate')return row.rate_online!==false&&(row.rate_online===true||coverage.includes('نرخ'));
   return row.capacity_online!==false&&(row.capacity_online===true||coverage.includes('ظرفیت'));
 }
 function pickValue(row:any,names:string[]){
-  const key=Object.keys(row||{}).find(k=>names.some(name=>normalizeFa(k)===normalizeFa(name)||normalizeFa(k).includes(normalizeFa(name))));
+  const keys=Object.keys(row||{});
+  const wanted=names.map(keyText).filter(Boolean);
+  const key=keys.find(k=>wanted.some(w=>keyText(k)===w||keyText(k).includes(w)||w.includes(keyText(k))));
   return key?row[key]:'';
 }
+function firstNonEmpty(row:any,indices:number[]){
+  const values=Object.values(row||{});
+  for(const index of indices){const v=rawText(values[index]);if(v)return v}
+  return '';
+}
 function buildRowsFromMatrix(matrix:any[][],slot:ExactFileSlot){
-  let headerIndex=slot.key==='mehr'?2:matrix.findIndex(row=>row.filter(cell=>rawText(cell)).length>=3&&row.some(cell=>/هتل|hotel|رزرو|reservation|city|شهر|تاریخ|date/i.test(rawText(cell))));
+  let headerIndex=slot.key==='mehr'?2:matrix.findIndex(row=>row.filter(cell=>rawText(cell)).length>=3&&row.some(cell=>/هتل|hotel|رزرو|reservation|city|شهر|تاریخ|date|کد/i.test(rawText(cell))));
   if(headerIndex<0)headerIndex=0;
   const headers=(matrix[headerIndex]||[]).map((cell:any,index:number)=>rawText(cell)||`col_${index+1}`);
   return matrix.slice(headerIndex+1).filter(row=>row.some(cell=>rawText(cell))).map(row=>Object.fromEntries(headers.map((h:string,index:number)=>[h,row[index]??''])));
 }
+function rowHotelCode(row:any){return rawText(pickValue(row,['کد هتل','hotel_code','hotel code','HotelId','Hotel ID','کد','HotelCode','اقامتگاه کد']))}
+function rowHotelTitle(row:any){return rawText(pickValue(row,['نام هتل','هتل','hotel','hotel name','HotelName','نام اقامتگاه','نام مرکز'])) || firstNonEmpty(row,[0,1])}
+function rowCity(row:any){return rawText(pickValue(row,['شهر','city','CityName']))}
+function rowValue(row:any,names:string[]){return asNumber(pickValue(row,names))}
+function rowCount(row:any,names:string[],fallback=1){const n=rowValue(row,names);return n||fallback}
+function mergeText(a?:any,b?:any){return rawText(a)||rawText(b)||''}
+function makeExport(rows:any[],fileName:string){
+  if(typeof document==='undefined')return;
+  const headers=Object.keys(rows[0]||{empty:''});
+  const body='\ufeff'+[headers.join(','),...rows.map(r=>headers.map(h=>`"${String(r[h]??'').replaceAll('"','""')}"`).join(','))].join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type:'text/csv;charset=utf-8'}));a.download=fileName;a.click();
+}
 
 export default function SupplyChainCommandCenter({hotels=[],tasks=[],users=[],me,setView,onCreateTask,onOpenHotelImport,onImportExperts,onImportAssignments}:Props){
-  const [tab,setTab]=useState<Tab>('overview');
+  const [tab,setTab]=useState<Tab>('dashboard');
   const [loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [automation,setAutomation]=useState<any[]>([]),[rules,setRules]=useState<any[]>([]),[coverage,setCoverage]=useState<any[]>([]);
   const [assignments,setAssignments]=useState<any[]>([]),[profiles,setProfiles]=useState<any[]>([]),[reports,setReports]=useState<any[]>([]);
-  const [sales,setSales]=useState<any[]>([]),[blockers,setBlockers]=useState<any[]>([]),[settings,setSettings]=useState({capacityMinutes:12,rateMinutes:8,capacityWeight:65,rateWeight:35});
-  const [exactFiles,setExactFiles]=useState<any[]>([]);
-  const exactInputs=useRef<Record<string,HTMLInputElement|null>>({});
-  const expertInput=useRef<HTMLInputElement>(null),assignmentInput=useRef<HTMLInputElement>(null),salesInput=useRef<HTMLInputElement>(null);
+  const [sales,setSales]=useState<any[]>([]),[blockers,setBlockers]=useState<any[]>([]),[storedTasks,setStoredTasks]=useState<any[]>([]),[events,setEvents]=useState<any[]>([]);
+  const [settings,setSettings]=useState({capacityMinutes:12,rateMinutes:8,capacityWeight:65,rateWeight:35});
+  const [importRuns,setImportRuns]=useState<any[]>([]),[importRows,setImportRows]=useState<any[]>([]),[exactFiles,setExactFiles]=useState<any[]>([]);
+  const [query,setQuery]=useState(''),[selectedHotelKey,setSelectedHotelKey]=useState(''),[ownerDraft,setOwnerDraft]=useState<Record<string,string>>({});
+  const [aiText,setAiText]=useState(''),[aiLoading,setAiLoading]=useState(false);
+  const fileInputs=useRef<Record<string,HTMLInputElement|null>>({});
 
   async function refresh(){
     setLoading(true);setError('');
@@ -88,13 +118,14 @@ export default function SupplyChainCommandCenter({hotels=[],tasks=[],users=[],me
       const results=await Promise.allSettled([
         loadRows('ihos_hotel_automation'),loadRows('ihos_provider_rules'),loadRows('ihos_provider_coverage'),
         loadRows('ihos_hotel_assignments'),loadRows('ihos_hotel_financial_profiles'),loadRows('ihos_work_reports'),
-        loadRows('ihos_hotel_sales_metrics'),loadRows('ihos_hotel_blockers'),loadRows('ihos_settings','key,value',5000)
+        loadRows('ihos_hotel_sales_metrics'),loadRows('ihos_hotel_blockers'),loadRows('ihos_settings','key,value',5000),
+        loadRows('ihos_supply_import_runs'),loadRows('ihos_supply_import_rows'),loadRows('ihos_hotel_events'),loadRows('ihos_tasks')
       ]);
       const rows=(index:number)=>results[index].status==='fulfilled'?(results[index] as PromiseFulfilledResult<any[]>).value:[];
       setAutomation(rows(0));setRules(rows(1));setCoverage(rows(2));setAssignments(rows(3));setProfiles(rows(4));setReports(rows(5));setSales(rows(6));setBlockers(rows(7));
       const config=new Map(rows(8).map((item:any)=>[item.key,item.value]));
-      const fileState=config.get('supply_exact_data_files');
-      setExactFiles(Array.isArray(fileState)?fileState:[]);
+      const fileState=config.get('supply_exact_data_files');setExactFiles(Array.isArray(fileState)?fileState:[]);
+      setImportRuns(rows(9));setImportRows(rows(10));setEvents(rows(11));setStoredTasks(rows(12));
       setSettings(current=>({
         capacityMinutes:asNumber(config.get('supply_manual_capacity_minutes'))||current.capacityMinutes,
         rateMinutes:asNumber(config.get('supply_manual_rate_minutes'))||current.rateMinutes,
@@ -107,201 +138,176 @@ export default function SupplyChainCommandCenter({hotels=[],tasks=[],users=[],me
   }
   useEffect(()=>{void refresh()},[]);
 
+  const allTasks=useMemo(()=>{
+    const map=new Map<string,any>();
+    [...tasks,...storedTasks].forEach(task=>{if(task?.id)map.set(task.id,task)});
+    return [...map.values()];
+  },[tasks,storedTasks]);
+
+  const rowsByFile=useMemo(()=>{
+    const map:Record<string,any[]>={};
+    EXACT_FILE_SLOTS.forEach(slot=>{map[slot.key]=[]});
+    importRows.forEach(row=>{const key=row.file_key; if(key){(map[key] ||= []).push(row.payload||row)}});
+    return map;
+  },[importRows]);
+
   const analysis=useMemo(()=>{
-    const autoMap=new Map(automation.map(row=>[row.hotel_id,row]));
     const profileMap=new Map(profiles.map(row=>[row.hotel_id,row]));
+    const autoMap=new Map(automation.map(row=>[row.hotel_id,row]));
     const ruleRows=(rules.length?rules:DEFAULT_PROVIDER_RULES.map((rule:any)=>({name:rule.name,rate_api:rule.rateApi,capacity_api:rule.capacityApi,active:rule.active!==false,priority:rule.priority||99})));
-    const ruleMap=new Map(ruleRows.map(row=>[providerKey(row.name),row]));
+    const ruleMap=new Map(ruleRows.map(row=>[normalizeFa(row.name||''),row]));
     const coverageMap=new Map<string,any[]>();
-    coverage.filter(row=>row.active!==false).forEach(row=>{const key=row.hotel_id||`code:${row.hotel_code}`;coverageMap.set(key,[...(coverageMap.get(key)||[]),row])});
-    let cooperating=0,fullLive=0,capacityLive=0,rateLive=0,manual=0,migratable=0,multiProvider=0;
-    const providerStats=new Map<string,any>();
-    const financeStats=new Map<string,number>();
-    const hotelRows=hotels.map(hotel=>{
-      const auto=autoMap.get(hotel.id)||{};
-      const provider=String(auto.provider||hotel.provider||'IHO Provider').trim()||'IHO Provider';
-      const rule:any=ruleMap.get(providerKey(provider))||{};
-      const rateApi=rule.active!==false&&!!rule.rate_api;
-      const capacityApi=rule.active!==false&&!!rule.capacity_api;
-      const selfRate=!!auto.hotel_rate;
-      const selfCapacity=!!auto.hotel_capacity;
-      const manualRate=!!String(auto.rate_expert||'').trim();
-      const manualCapacity=!!String(auto.capacity_expert||'').trim();
-      const rateOnline=rateApi||selfRate||manualRate;
-      const capacityOnline=capacityApi||selfCapacity||manualCapacity;
-      const onlineScore=(capacityOnline?settings.capacityWeight:0)+(rateOnline?settings.rateWeight:0);
-      const automatedScore=(capacityApi||selfCapacity?settings.capacityWeight:0)+(rateApi||selfRate?settings.rateWeight:0);
-      const candidates=coverageMap.get(hotel.id)||coverageMap.get(`code:${hotel.hotel_code}`)||[];
-      const eligibleProviders=[...new Set(candidates.map(item=>item.provider).filter(Boolean))];
-      const recommendations=candidates.filter(item=>providerKey(item.provider)!==providerKey(provider)).map(item=>{
-        const candidateRule:any=ruleMap.get(providerKey(item.provider))||{};
-        const cap=channelValue(item,'capacity')||!!candidateRule.capacity_api;
-        const rate=channelValue(item,'rate')||!!candidateRule.rate_api;
-        return{provider:item.provider,score:(cap?settings.capacityWeight:0)+(rate?settings.rateWeight:0),priority:Number(candidateRule.priority||item.priority||99)};
-      }).sort((a,b)=>b.score-a.score||a.priority-b.priority);
-      const canMigrate=!!recommendations[0]&&recommendations[0].score>automatedScore;
-      const cooperation=normalizeFa(hotel.cooperation_status);
-      const active=cooperation.includes('در حال همکاری')||cooperation==='فعال'||cooperation.includes('همکار فعال');
-      if(active){
-        cooperating++;
-        if(onlineScore>=100)fullLive++;
-        if(capacityOnline)capacityLive++;
-        if(rateOnline)rateLive++;
-        if(manualRate||manualCapacity)manual++;
-        if(canMigrate)migratable++;
-        if(eligibleProviders.length>1)multiProvider++;
-      }
-      const p=providerStats.get(provider)||{provider,total:0,full:0,capacity:0,rate:0,manual:0};
-      p.total++;if(onlineScore>=100)p.full++;if(capacityOnline)p.capacity++;if(rateOnline)p.rate++;if(manualRate||manualCapacity)p.manual++;providerStats.set(provider,p);
-      const financial=financialClass(hotel,profileMap.get(hotel.id));financeStats.set(financial.level,(financeStats.get(financial.level)||0)+1);
-      return{...hotel,provider,active,rateOnline,capacityOnline,onlineScore,automatedScore,manualRate,manualCapacity,recommendation:recommendations[0],eligibleProviders,financial};
+    coverage.filter(row=>row.active!==false).forEach(row=>{const key=row.hotel_id||`code:${keyText(row.hotel_code)}`;coverageMap.set(key,[...(coverageMap.get(key)||[]),row])});
+    const base=new Map<string,HotelInsight>();
+    function ensure(input:any){
+      const title=mergeText(input.title,input.hotel_title)||rowHotelTitle(input)||'هتل بدون نام';
+      const code=mergeText(input.hotel_code,rowHotelCode(input));
+      const key=hotelKey(code,title)||makeId('hotel-key');
+      const current=base.get(key);
+      const merged:HotelInsight={
+        id:current?.id||input.id||key,
+        key,hotel_code:mergeText(current?.hotel_code,code),title:mergeText(current?.title,title),city:mergeText(current?.city,input.city||rowCity(input)),province:mergeText(current?.province,input.province||pickValue(input,['استان','province'])),
+        provider:mergeText(current?.provider,input.provider||input['نام پروایدر']||pickValue(input,['نام پروایدر','provider','Provider'])),
+        caring_category:mergeText(current?.caring_category,input.caring_category||input.CaringCategory||pickValue(input,['CaringCategory','دسته بندی','دسته بندی هتل'])),
+        cooperation_status:mergeText(current?.cooperation_status,input.cooperation_status||pickValue(input,['وضعیت همکاری','cooperation_status'])),
+        site_visible:current?.site_visible ?? (String(pickValue(input,['نمایش در سایت','site_visible'])).includes('true')||String(pickValue(input,['نمایش در سایت','site_visible'])).includes('بله')),
+        search_visible:current?.search_visible ?? (String(pickValue(input,['نمایش در نتایج جستجو','search_visible'])).includes('true')||String(pickValue(input,['نمایش در نتایج جستجو','search_visible'])).includes('بله')),
+        capacity_total:current?.capacity_total||asNumber(input.capacity_total||pickValue(input,['ظرفیت کلی هتل','capacity_total'])),purchase_period:current?.purchase_period||asNumber(input.purchase_period||pickValue(input,['دوره خرید','purchase_period'])),payment_period:current?.payment_period||asNumber(input.payment_period||pickValue(input,['دوره پرداخت','payment_period'])),
+        capacity_owner:current?.capacity_owner,rate_owner:current?.rate_owner,city_owner:current?.city_owner,
+        confirmed:current?.confirmed||0,unconfirmed:current?.unconfirmed||0,reserveRows:current?.reserveRows||0,nights:current?.nights||0,gross:current?.gross||0,margin:current?.margin||0,traffic:current?.traffic||0,conversion:current?.conversion||0,
+        risk:0,opportunity:0,health:0,reasons:[],actions:[],openTasks:0,doneTasks:0,events:current?.events||[],lastEvent:current?.lastEvent
+      };
+      base.set(key,merged);return merged;
+    }
+    hotels.forEach(h=>ensure(h));
+    rowsByFile.hotelData.forEach(row=>ensure(row));
+    rowsByFile.mehr.forEach(row=>{const h=ensure(row); if(!h.caring_category)h.caring_category=mergeText(h.caring_category,pickValue(row,['CaringCategory','اولویت','دسته بندی']))});
+
+    function match(row:any){
+      const code=rowHotelCode(row);const title=rowHotelTitle(row);const byCode=hotelKey(code,'');const byTitle=hotelTitleKey(title);
+      return base.get(byCode)||base.get(byTitle)||ensure({hotel_code:code,title,city:rowCity(row)});
+    }
+    rowsByFile.reserveList.forEach(row=>{const h=match(row);h.reserveRows+=rowCount(row,['تعداد رزرو','count','booking_count'],1)});
+    rowsByFile.confirmed.forEach(row=>{const h=match(row);h.confirmed+=rowCount(row,['تعداد رزرو','رزرو قطعی','confirmed','booking_count'],1);h.nights+=rowValue(row,['شب اقامت','nights','room_nights','room nights']);h.gross+=rowValue(row,['فروش','مبلغ','amount','gross','gross_sales']);h.margin+=rowValue(row,['سود','مارجین','profit','margin','margin_amount'])});
+    rowsByFile.unconfirmed.forEach(row=>{const h=match(row);h.unconfirmed+=rowCount(row,['تعداد رزرو','رزرو غیر قطعی','unconfirmed','booking_count'],1);h.nights+=rowValue(row,['شب اقامت','nights','room_nights']);h.gross+=rowValue(row,['فروش','مبلغ','amount','gross','gross_sales'])});
+    rowsByFile.traffic.forEach(row=>{const h=match(row);h.traffic+=rowValue(row,['بازدید','sessions','Users','کاربر','views','pageviews','event count'])||1;const conv=rowValue(row,['conversion','نرخ تبدیل','purchase conversion']);if(conv)h.conversion=Math.max(h.conversion,conv)});
+    rowsByFile.assignment.forEach(row=>{
+      const h=match(row);const values=Object.values(row).map(rawText);const taskLike=normalizeFa(pickValue(row,['taskId','task id','تسک','نوع تسک'])||values[1]);const expert=rawText(pickValue(row,['کارشناس','نام کارشناس','owner','assignee','مسئول'])||values[2]||values[1]);
+      if(!expert)return;
+      if(taskLike.includes('1')||taskLike.includes('capacity')||taskLike.includes('ظرفیت'))h.capacity_owner=expert;
+      else if(taskLike.includes('2')||taskLike.includes('rate')||taskLike.includes('نرخ'))h.rate_owner=expert;
+      else if(taskLike.includes('4')||taskLike.includes('city')||taskLike.includes('شهر'))h.city_owner=expert;
+      else if(!h.capacity_owner)h.capacity_owner=expert;
     });
-    const statuses=new Map<string,number>();hotels.forEach(h=>{const key=String(h.cooperation_status||'نامشخص').trim()||'نامشخص';statuses.set(key,(statuses.get(key)||0)+1)});
-    const expiring=hotels.filter(h=>{const days=daysUntil(h.status_end_date);return days>=0&&days<=45;}).sort((a,b)=>daysUntil(a.status_end_date)-daysUntil(b.status_end_date));
-    return{
-      hotelRows,cooperating,fullLive,capacityLive,rateLive,manual,migratable,multiProvider,expiring,
-      providers:[...providerStats.values()].sort((a,b)=>b.total-a.total),
-      finances:['A+','A','A-','B+','B','B-','D','F'].map(level=>({level,count:financeStats.get(level)||0})),
-      statuses:[...statuses.entries()].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count)
-    };
-  },[hotels,automation,rules,coverage,profiles,settings]);
+    assignments.filter(row=>row.active!==false).forEach(row=>{const h=base.get(hotelKey(row.hotel_code,row.hotel_title))||base.get(row.hotel_id);if(!h)return;const role=normalizeFa(row.assignment_role||row.role||'');const name=rawText(row.user_name||row.owner_name);if(role.includes('rate')||role.includes('نرخ'))h.rate_owner=name||h.rate_owner;else if(role.includes('capacity')||role.includes('ظرفیت'))h.capacity_owner=name||h.capacity_owner;else if(role.includes('city'))h.city_owner=name||h.city_owner});
+    const byId=new Map([...base.values()].map(h=>[h.id,h]));
+    const byTitle=new Map([...base.values()].map(h=>[keyText(h.title),h]));
+    allTasks.forEach(task=>{const h=byId.get(task.hotel_id)||byTitle.get(keyText(task.hotel_title));if(!h)return;if(isDone(task.status))h.doneTasks++;else h.openTasks++});
+    events.forEach(ev=>{const h=byId.get(ev.hotel_id)||byTitle.get(keyText(ev.hotel_title));if(!h)return;h.events.push(ev)});
+    const now=Date.now();
+    const rows=[...base.values()].map(h=>{
+      const eventSorted=[...h.events].sort((a,b)=>String(b.occurred_at||b.created_at||'').localeCompare(String(a.occurred_at||a.created_at||'')));
+      h.lastEvent=eventSorted[0];
+      const reasons:string[]=[];const actions:string[]=[];let risk=0;let opp=0;
+      if(!h.capacity_owner){risk+=18;opp+=10;reasons.push('مسئول ظرفیت ندارد');actions.push('تعیین مسئول ظرفیت')}
+      if(!h.rate_owner){risk+=12;opp+=8;reasons.push('مسئول نرخ ندارد');actions.push('تعیین مسئول نرخ')}
+      if(h.unconfirmed>0){risk+=Math.min(28,h.unconfirmed*4);opp+=Math.min(25,h.unconfirmed*5);reasons.push(`${fa(h.unconfirmed)} رزرو غیرقطعی دارد`);actions.push('پیگیری رزروهای غیرقطعی')}
+      if(h.traffic>0&&h.confirmed===0){risk+=20;opp+=20;reasons.push('ترافیک دارد اما فروش قطعی ندارد');actions.push('بررسی نرخ/ظرفیت و پیشنهاد فروش')}
+      if(h.traffic>20&&h.confirmed>0&&h.traffic/Math.max(1,h.confirmed)>30){risk+=12;opp+=18;reasons.push('ترافیک نسبت به رزرو قطعی زیاد است');actions.push('تحلیل نرخ تبدیل و محتوای هتل')}
+      if(h.openTasks>0){risk+=Math.min(15,h.openTasks*5);reasons.push(`${fa(h.openTasks)} تسک باز دارد`)}
+      const lastTime=h.lastEvent?new Date(h.lastEvent.occurred_at||h.lastEvent.created_at).getTime():0;
+      if(!lastTime||now-lastTime>7*86400000){risk+=8;reasons.push('اقدام جدید در ۷ روز اخیر ثبت نشده');actions.push('ثبت اقدام پیگیری جدید')}
+      if(h.search_visible===false){risk+=8;reasons.push('در نتایج جستجو نمایش ندارد');actions.push('بررسی نمایش در سایت')}
+      if(h.confirmed>0){opp+=Math.min(20,h.confirmed*2)}
+      if(h.gross>0){opp+=Math.min(20,Math.round(h.gross/100000000))}
+      if(normalizeFa(h.caring_category).includes('پیشران')||normalizeFa(h.caring_category).includes('کلیدی')){opp+=12;risk+=3}
+      h.risk=clamp(risk);h.opportunity=clamp(opp);h.health=clamp(100-risk+Math.min(20,h.confirmed*2));h.reasons=reasons;h.actions=[...new Set(actions)].slice(0,4);return h;
+    }).sort((a,b)=>b.risk-a.risk||b.opportunity-a.opportunity);
+    const withIssues=rows.filter(h=>h.risk>=45||h.actions.length);
+    return {rows,withIssues,critical:rows.filter(h=>h.risk>=70),healthy:rows.filter(h=>h.health>=75),totals:{hotels:rows.length,confirmed:rows.reduce((s,h)=>s+h.confirmed,0),unconfirmed:rows.reduce((s,h)=>s+h.unconfirmed,0),traffic:rows.reduce((s,h)=>s+h.traffic,0),gross:rows.reduce((s,h)=>s+h.gross,0),nights:rows.reduce((s,h)=>s+h.nights,0)},files:EXACT_FILE_SLOTS.map(slot=>({slot,state:exactFiles.find(x=>x.key===slot.key),rows:rowsByFile[slot.key]?.length||0}))};
+  },[hotels,rowsByFile,profiles,automation,rules,coverage,assignments,allTasks,events,exactFiles]);
 
-  const people=useMemo(()=>{
-    const activeAssignments=assignments.filter(row=>row.active!==false);
-    const todayReports=reports.filter(row=>dateOnly(row.occurred_at||row.created_at)===dateOnly(nowIso()));
-    return users.filter(user=>user.is_active!==false).map(user=>{
-      const byId=activeAssignments.filter(row=>row.user_id===user.id||normalizeFa(row.user_name)===normalizeFa(user.full_name));
-      const autoRate=automation.filter(row=>normalizeFa(row.rate_expert)===normalizeFa(user.full_name)).length;
-      const autoCapacity=automation.filter(row=>normalizeFa(row.capacity_expert)===normalizeFa(user.full_name)).length;
-      const rate=Math.max(autoRate,new Set(byId.filter(row=>row.assignment_role==='rate_expert').map(row=>row.hotel_id)).size);
-      const capacity=Math.max(autoCapacity,new Set(byId.filter(row=>row.assignment_role==='capacity_expert').map(row=>row.hotel_id)).size);
-      const openTasks=tasks.filter(task=>task.assigned_to===user.id&&!isDone(task.status));
-      const late=openTasks.filter(task=>task.deadline&&daysUntil(task.deadline)<0).length;
-      const userReports=reports.filter(row=>row.user_id===user.id||normalizeFa(row.user_name)===normalizeFa(user.full_name));
-      const points=userReports.reduce((sum,row)=>sum+asNumber(row.weight||1),0);
-      const minutes=capacity*settings.capacityMinutes+rate*settings.rateMinutes;
-      return{user,rate,capacity,minutes,open:openTasks.length,late,points,today:todayReports.filter(row=>row.user_id===user.id).length};
-    }).sort((a,b)=>b.points-a.points||b.capacity+b.rate-(a.capacity+a.rate));
-  },[users,assignments,automation,tasks,reports,settings]);
+  const selectedHotel=useMemo(()=>analysis.rows.find(h=>h.key===selectedHotelKey)||analysis.rows[0], [analysis.rows,selectedHotelKey]);
+  const filteredHotels=useMemo(()=>analysis.rows.filter(h=>!query||normalizeFa(`${h.title} ${h.city} ${h.provider} ${h.caring_category} ${h.hotel_code}`).includes(normalizeFa(query))).slice(0,150),[analysis.rows,query]);
+  const teamKpis=useMemo(()=>users.filter(u=>u.is_active!==false).map(user=>{
+    const name=normalizeFa(user.full_name);const owned=analysis.rows.filter(h=>normalizeFa(h.capacity_owner)===name||normalizeFa(h.rate_owner)===name||normalizeFa(h.city_owner)===name);
+    const assigned=allTasks.filter(t=>t.assigned_to===user.id||normalizeFa(t.assigned_name)===name);const done=assigned.filter(t=>isDone(t.status));const late=assigned.filter(t=>!isDone(t.status)&&t.deadline&&daysUntil(t.deadline)<0);
+    const acts=events.filter(e=>e.actor_id===user.id||normalizeFa(e.actor_name)===name);
+    return{user,owned:owned.length,open:assigned.length-done.length,done:done.length,late:late.length,actions:acts.length,riskOwned:owned.filter(h=>h.risk>=60).length,score:done.length*3+acts.length+owned.filter(h=>h.health>=75).length*2-late.length*2}
+  }).sort((a,b)=>b.score-a.score),[users,analysis.rows,allTasks,events]);
 
-  const salesSummary=useMemo(()=>sales.reduce((sum,row)=>({
-    gross:sum.gross+asNumber(row.gross_sales),margin:sum.margin+asNumber(row.margin_amount),nights:sum.nights+asNumber(row.room_nights),
-    confirmed:sum.confirmed+asNumber(row.confirmed_bookings),unconfirmed:sum.unconfirmed+asNumber(row.unconfirmed_bookings)
-  }),{gross:0,margin:0,nights:0,confirmed:0,unconfirmed:0}),[sales]);
-  const openBlockers=blockers.filter(row=>!['resolved','closed','حل شد','بسته شد'].includes(String(row.status||'')));
-  const urgentTasks=tasks.filter(task=>!isDone(task.status)&&(task.priority==='فوری'||task.deadline&&daysUntil(task.deadline)<0));
-
-  async function handleImport(file:File|undefined,runner:((file:File)=>Promise<void>)|undefined,label:string){
-    if(!file||!runner)return;setNotice(`در حال اعمال ${label}...`);
-    try{await runner(file);setNotice(`${label} با موفقیت اعمال شد`);await refresh()}catch(e:any){setNotice(`${label} ناموفق بود: ${e.message}`)}
-  }
   async function importExactFile(slot:ExactFileSlot,file:File|undefined){
-    if(!file)return;
-    setNotice(`در حال خواندن ${slot.name}...`);
-    try{
-      const XLSX=await import('xlsx');
-      const wb=XLSX.read(await file.arrayBuffer(),{type:'array',raw:false});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const matrix=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false}) as any[][];
-      const rows=buildRowsFromMatrix(matrix,slot);
-      if(!rows.length)throw new Error('هیچ ردیف معتبری در فایل پیدا نشد');
-      const importId=`exact-${slot.key}-${Date.now()}`;
-      const createdAt=nowIso();
-      const normalizedRows=rows.map((row,index)=>({
-        id:`${importId}-${index+1}`,
-        import_id:importId,
-        file_key:slot.key,
-        file_name:slot.name,
-        uploaded_file_name:file.name,
-        row_index:index+1,
-        hotel_code:rawText(pickValue(row,['کد هتل','hotel code','hotel_code','HotelId','Hotel ID'])),
-        hotel_title:rawText(pickValue(row,['نام هتل','هتل','hotel','hotel name','HotelName'])),
-        city:rawText(pickValue(row,['شهر','city'])),
-        payload:row,
-        created_at:createdAt,
-        updated_at:createdAt
-      }));
-      const run={id:importId,file_key:slot.key,file_name:slot.name,uploaded_file_name:file.name,rows_count:rows.length,required:slot.required,created_at:createdAt,updated_at:createdAt};
-      await saveRows('ihos_supply_import_runs',[run]);
-      await saveRows('ihos_supply_import_rows',normalizedRows);
-      const next=[...exactFiles.filter(item=>item.key!==slot.key),{key:slot.key,name:slot.name,fileName:file.name,rows:rows.length,ok:true,uploadedAt:createdAt}];
-      await saveSetting('supply_exact_data_files',next);
-      setExactFiles(next);
-      if(slot.key==='assignment'&&onImportAssignments)try{await onImportAssignments(file)}catch{}
-      setNotice(`${slot.name}: ${fa(rows.length)} ردیف در Supabase ذخیره شد و برای تحلیل‌های بعدی آماده است.`);
-      await refresh();
-    }catch(e:any){setNotice(`${slot.name} ناموفق بود: ${e.message}`)}
-  }
-  async function importSales(file:File){
-    setNotice('در حال خواندن داده فروش...');
+    if(!file)return;setNotice(`در حال خواندن ${slot.name}...`);
     try{
       const XLSX=await import('xlsx');const wb=XLSX.read(await file.arrayBuffer(),{type:'array',raw:false});const ws=wb.Sheets[wb.SheetNames[0]];
-      const raw=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false}) as Record<string,any>[];
-      const pick=(row:any,names:string[])=>{const key=Object.keys(row).find(k=>names.some(name=>normalizeFa(name)===normalizeFa(k)));return key?row[key]:''};
-      const hotelMap=new Map(hotels.map(h=>[normalizeFa(h.hotel_code),h]));
-      const titleMap=new Map(hotels.map(h=>[normalizeFa(h.title),h]));
-      const rows=raw.map((row,index)=>{const code=String(pick(row,['کد هتل','hotel_code','hotel code']));const title=String(pick(row,['نام هتل','hotel_title','hotel name']));const hotel=hotelMap.get(normalizeFa(code))||titleMap.get(normalizeFa(title));if(!hotel)return null;const date=dateOnly(pick(row,['تاریخ','date','metric_date']))||dateOnly(nowIso());return{id:`sales-${hotel.id}-${date}-${index}`,hotel_id:hotel.id,hotel_code:hotel.hotel_code,hotel_title:hotel.title,metric_date:date,confirmed_bookings:asNumber(pick(row,['رزرو قطعی','confirmed bookings','confirmed_bookings'])),unconfirmed_bookings:asNumber(pick(row,['رزرو غیر قطعی','unconfirmed bookings','unconfirmed_bookings'])),room_nights:asNumber(pick(row,['شب اقامت','room nights','room_nights'])),gross_sales:asNumber(pick(row,['فروش','gross sales','gross_sales'])),margin_amount:asNumber(pick(row,['مارجین','margin','margin_amount'])),cancellations:asNumber(pick(row,['کنسلی','cancellations'])),source_name:file.name,created_at:nowIso(),updated_at:nowIso()}}).filter(Boolean) as any[];
-      if(!rows.length)throw new Error('هیچ هتل معتبری با کد یا نام فایل اصلی تطبیق پیدا نکرد');
-      await saveRows('ihos_hotel_sales_metrics',rows);setNotice(`${fa(rows.length)} ردیف فروش اعمال شد`);await refresh();
-    }catch(e:any){setNotice(`ورود داده فروش ناموفق بود: ${e.message}`)}
+      const matrix=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false}) as any[][];const rows=buildRowsFromMatrix(matrix,slot);
+      if(!rows.length)throw new Error('هیچ ردیف معتبری در فایل پیدا نشد');
+      const importId=`exact-${slot.key}-${Date.now()}`;const createdAt=nowIso();
+      const normalizedRows=rows.map((row,index)=>({id:`${importId}-${index+1}`,import_id:importId,file_key:slot.key,file_name:slot.name,uploaded_file_name:file.name,row_index:index+1,hotel_code:rowHotelCode(row),hotel_title:rowHotelTitle(row),city:rowCity(row),payload:row,created_at:createdAt,updated_at:createdAt}));
+      const run={id:importId,file_key:slot.key,file_name:slot.name,uploaded_file_name:file.name,rows_count:rows.length,required:slot.required,created_at:createdAt,updated_at:createdAt};
+      await saveRows('ihos_supply_import_runs',[run]);await saveRows('ihos_supply_import_rows',normalizedRows);await saveRows(slot.table,normalizedRows);
+      const next=[...exactFiles.filter(item=>item.key!==slot.key),{key:slot.key,name:slot.name,fileName:file.name,rows:rows.length,ok:true,uploadedAt:createdAt}];
+      await saveSetting('supply_exact_data_files',next);setExactFiles(next);
+      if(slot.key==='assignment'&&onImportAssignments)try{await onImportAssignments(file)}catch{}
+      await saveRows('ihos_hotel_events',[{id:makeId('event'),event_type:'data_import',title:`ورود فایل ${slot.name}`,description:`${fa(rows.length)} ردیف از ${file.name} وارد شد`,actor_id:me?.id,actor_name:me?.full_name,entity_type:'import',entity_id:importId,occurred_at:createdAt,created_at:createdAt}]);
+      setNotice(`${slot.name}: ${fa(rows.length)} ردیف ذخیره شد و تحلیل‌ها آپدیت شدند.`);await refresh();
+    }catch(e:any){setNotice(`${slot.name} ناموفق بود: ${e.message}`)}
+  }
+  async function createTaskForHotel(h:HotelInsight,action?:string,assignedId?:string){
+    const user=users.find(u=>u.id===(assignedId||ownerDraft[h.key]));const now=nowIso();
+    const task={id:makeId('task'),title:action||h.actions[0]||`پیگیری ${h.title}`,description:`Risk ${h.risk} / Opportunity ${h.opportunity}\nدلایل: ${h.reasons.join('، ')}`,hotel_id:h.id,hotel_title:h.title,city:h.city,priority:h.risk>=70?'فوری':h.risk>=45?'بالا':'متوسط',status:'در انتظار انجام',category:'Supply Follow-up',assigned_to:user?.id,assigned_name:user?.full_name,created_by:me?.id,deadline:new Date(Date.now()+86400000).toISOString().slice(0,10),source_type:'hotel_risk',source_id:h.key,created_at:now,updated_at:now};
+    const event={id:makeId('event'),hotel_id:h.id,hotel_title:h.title,event_type:'task_created',title:`تسک ساخته شد: ${task.title}`,description:task.description,severity:task.priority,actor_id:me?.id,actor_name:me?.full_name,entity_type:'task',entity_id:task.id,occurred_at:now,created_at:now};
+    await saveRows('ihos_tasks',[task]);await saveRows('ihos_hotel_events',[event]);setNotice(`تسک برای ${h.title}${user?` و مسئول ${user.full_name}`:''} ثبت شد.`);await refresh();
+  }
+  async function logHotelAction(h:HotelInsight,title:string){
+    const now=nowIso();const event={id:makeId('event'),hotel_id:h.id,hotel_title:h.title,event_type:'manual_action',title,description:'ثبت اقدام دستی از مرکز فرمان تأمین',actor_id:me?.id,actor_name:me?.full_name,occurred_at:now,created_at:now};
+    await saveRows('ihos_hotel_events',[event]);setNotice('اقدام روی Timeline هتل ثبت شد.');await refresh();
   }
   async function saveSupplySettings(){
     setNotice('در حال ذخیره تنظیمات محاسبات...');
     try{await Promise.all([saveSetting('supply_manual_capacity_minutes',settings.capacityMinutes),saveSetting('supply_manual_rate_minutes',settings.rateMinutes),saveSetting('supply_capacity_weight',settings.capacityWeight),saveSetting('supply_rate_weight',settings.rateWeight)]);setNotice('تنظیمات محاسبات ذخیره شد')}catch(e:any){setNotice(`ذخیره تنظیمات ناموفق بود: ${e.message}`)}
   }
+  async function runAi(){
+    setAiLoading(true);setAiText('');
+    try{
+      const top=analysis.withIssues.slice(0,20).map(h=>({hotel:h.title,city:h.city,risk:h.risk,opportunity:h.opportunity,reasons:h.reasons,actions:h.actions,confirmed:h.confirmed,unconfirmed:h.unconfirmed,traffic:h.traffic,capacity_owner:h.capacity_owner,rate_owner:h.rate_owner}));
+      const prompt=`بر اساس داده‌های زنجیره تامین ایران‌هتل، یک تحلیل مدیریتی کوتاه بده: 1) وضعیت کلی 2) پنج اقدام فوری 3) ریسک‌های اصلی 4) پیشنهاد تسک برای تیم. داده: ${JSON.stringify({totals:analysis.totals,critical:analysis.critical.length,top})}`;
+      const response=await fetch('/api/avalai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+      const data=await response.json();setAiText(data.text||'تحلیلی دریافت نشد.');
+    }catch(e:any){setAiText(`AI در دسترس نبود. تحلیل Rule-based: ${analysis.critical.length} هتل بحرانی، ${analysis.withIssues.length} هتل نیازمند پیگیری و ${analysis.totals.unconfirmed} رزرو غیرقطعی شناسایی شد. اولویت امروز: تعیین Owner ظرفیت/نرخ و پیگیری رزروهای غیرقطعی.`)}finally{setAiLoading(false)}
+  }
+  function exportManagerReport(){makeExport(analysis.withIssues.map(h=>({hotel:h.title,city:h.city,provider:h.provider,risk:h.risk,opportunity:h.opportunity,health:h.health,confirmed:h.confirmed,unconfirmed:h.unconfirmed,traffic:h.traffic,capacity_owner:h.capacity_owner,rate_owner:h.rate_owner,next_action:h.actions[0],reasons:h.reasons.join(' | ')})),'IHO_supply_followup_hotels.csv')}
+  function exportTeam(){makeExport(teamKpis.map(k=>({user:k.user.full_name,owned_hotels:k.owned,open_tasks:k.open,done_tasks:k.done,late_tasks:k.late,actions:k.actions,risk_owned:k.riskOwned,score:k.score})),'IHO_supply_team_kpi.csv')}
 
-  const cooperating=Math.max(1,analysis.cooperating);
-  const tabs:[Tab,string,any][]=[['overview','تصویر کلان',Gauge],['online','آنلاین‌سازی',Wifi],['financial','مالی و فروش',CircleDollarSign],['performance','تیم و موانع',Users2],['data','ورود داده و تنظیمات',Database]];
+  const tabs:[Tab,string,any][]=[['dashboard','داشبورد تصمیم',Gauge],['inbox','ورود ۷ فایل',Database],['hotels','هتل‌های نیازمند پیگیری',ShieldAlert],['profile','پروفایل هتل',Hotel],['team','KPI کارشناسان',Users2],['tasks','تسک و اقدام',ListChecks],['exports','خروجی مدیرعامل',Download],['ai','تحلیل AI',Bot]];
   return <div className="supplyOSV23">
-    <section className="supplyHeroV23">
-      <div><span>SUPPLY CHAIN OPERATING SYSTEM</span><h1>مرکز فرمان زنجیره تأمین هتل</h1><p>یک تصویر قابل اقدام از همکاری، آنلاین‌سازی نرخ و ظرفیت، مهاجرت Provider، قرارداد، فروش و بار کاری تیم.</p><div className="supplyHeroActionsV23"><button className="btn primary" onClick={()=>setView?.('workReports')}>ثبت گزارش کار سریع</button><button className="btn glass" onClick={()=>setView?.('tasks')}>تسک‌های نیازمند اقدام</button></div></div>
-      <div className="supplyHealthV23"><div style={{'--supply-score':`${percent(analysis.capacityLive,cooperating)*3.6}deg`} as any}><b>{percent(analysis.capacityLive,cooperating)}٪</b><span>پوشش ظرفیت</span></div><small>{fa(analysis.capacityLive)} هتل دارای ظرفیت آنلاین یا دستی</small></div>
-    </section>
-    <div className="supplyTabsV23" role="tablist" aria-label="بخش‌های مرکز زنجیره تأمین">{tabs.map(([id,label,Icon])=><button key={id} className={tab===id?'active':''} role="tab" aria-selected={tab===id} onClick={()=>setTab(id)}><Icon/>{label}</button>)}<button className="refresh" onClick={refresh} disabled={loading}><RefreshCcw className={loading?'spin':''}/> بروزرسانی</button></div>
+    <section className="supplyHeroV23"><div><span>IRANHOTEL SUPPLY CHAIN OS</span><h1>مرکز فرمان زنجیره تأمین هتل</h1><p>آپلود داده‌ها، تشخیص وضعیت هر هتل، پیشنهاد اقدام، ساخت تسک، ثبت Timeline، KPI کارشناس و خروجی مدیرعامل در یک جریان واحد.</p><div className="supplyHeroActionsV23"><button className="btn primary" onClick={()=>setTab('inbox')}>ورود ۷ فایل اصلی</button><button className="btn glass" onClick={exportManagerReport}>خروجی هتل‌های نیازمند پیگیری</button></div></div><div className="supplyHealthV23"><div style={{'--supply-score':`${percent(analysis.healthy.length,Math.max(1,analysis.rows.length))*3.6}deg`} as any}><b>{percent(analysis.healthy.length,Math.max(1,analysis.rows.length))}٪</b><span>Health کل</span></div><small>{fa(analysis.withIssues.length)} هتل نیازمند اقدام</small></div></section>
+    <div className="supplyTabsV23" role="tablist">{tabs.map(([id,label,Icon])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon/>{label}</button>)}<button className="refresh" onClick={refresh} disabled={loading}><RefreshCcw className={loading?'spin':''}/> بروزرسانی</button></div>
     {(error||notice)&&<div className={error?'supplyNoticeV23 danger':'supplyNoticeV23'}>{error||notice}</div>}
 
-    {tab==='overview'&&<>
-      <section className="supplyMetricsV23">
-        <SupplyMetric icon={Building2} title="کل هتل‌ها" value={hotels.length} hint={`${fa(analysis.cooperating)} در حال همکاری`} tone="blue"/>
-        <SupplyMetric icon={CheckCircle2} title="کاملاً لایو" value={analysis.fullLive} hint={`${percent(analysis.fullLive,cooperating)}٪ هتل‌های همکار`} tone="green"/>
-        <SupplyMetric icon={Wifi} title="ظرفیت آنلاین" value={analysis.capacityLive} hint={`وزن ظرفیت ${settings.capacityWeight}٪`} tone="cyan"/>
-        <SupplyMetric icon={ArrowLeftRight} title="قابل مهاجرت" value={analysis.migratable} hint={`${fa(analysis.multiProvider)} هتل چند Providerی`} tone="orange"/>
-        <SupplyMetric icon={CalendarClock} title="وضعیت رو به پایان" value={analysis.expiring.length} hint="تا ۴۵ روز آینده" tone="purple"/>
-        <SupplyMetric icon={ShieldAlert} title="مانع باز" value={openBlockers.length} hint={`${fa(urgentTasks.length)} تسک مهم یا معوق`} tone="red"/>
-      </section>
-      <section className="supplyGridV23">
-        <article className="supplyPanelV23 span2"><PanelHead eyebrow="ONLINE MIX" title="وضعیت آنلاین‌سازی بر اساس Provider" action="مدیریت Providerها" onAction={()=>setView?.('hotelSuperApp')}/><div className="providerRowsV23">{analysis.providers.slice(0,10).map(row=><div key={row.provider}><div><b>{row.provider}</b><small>{fa(row.total)} هتل · {fa(row.manual)} دستی</small></div><Progress value={percent(row.full,row.total)} label={`${fa(row.full)} کاملاً لایو`}/><Progress value={percent(row.capacity,row.total)} label={`${fa(row.capacity)} ظرفیت`}/></div>)}</div></article>
-        <article className="supplyPanelV23"><PanelHead eyebrow="COOPERATION" title="ترکیب وضعیت همکاری"/><div className="statusRowsV23">{analysis.statuses.slice(0,8).map((row,index)=><div key={row.name}><i style={{background:['#2563eb','#14b8a6','#8b5cf6','#f59e0b','#ef4444'][index%5]}}/><span>{row.name}</span><b>{fa(row.count)}</b><small>{percent(row.count,hotels.length)}٪</small></div>)}</div></article>
-        <article className="supplyPanelV23"><PanelHead eyebrow="NEXT ACTIONS" title="اقدام‌های فوری مدیر عملیات"/><div className="actionListV23">{analysis.expiring.slice(0,4).map(h=><button key={h.id} onClick={()=>onCreateTask?.(h,{title:`تمدید وضعیت ${h.title}`,category:'قرارداد',priority:'بالا',deadline:h.status_end_date})}><CalendarClock/><span><b>{h.title}</b><small>{daysUntil(h.status_end_date)} روز تا پایان وضعیت</small></span></button>)}{analysis.hotelRows.filter(h=>h.active&&h.recommendation).slice(0,4).map(h=><button key={`m-${h.id}`} onClick={()=>onCreateTask?.(h,{title:`بررسی مهاجرت ${h.title} به ${h.recommendation.provider}`,category:'آنلاین‌سازی',priority:'بالا'})}><ArrowLeftRight/><span><b>{h.title}</b><small>پیشنهاد: {h.recommendation.provider} · امتیاز {h.recommendation.score}٪</small></span></button>)}{!analysis.expiring.length&&!analysis.migratable&&<Empty text="اقدام فوری از داده فعلی استخراج نشد."/>}</div></article>
-      </section>
-    </>}
+    {tab==='dashboard'&&<><section className="supplyMetricsV23"><SupplyMetric icon={Hotel} title="کل هتل‌ها" value={analysis.totals.hotels} hint="از Master و فایل‌های آپلودی" tone="blue"/><SupplyMetric icon={ShieldAlert} title="پرریسک" value={analysis.critical.length} hint="Risk بالای ۷۰" tone="red"/><SupplyMetric icon={CheckCircle2} title="رزرو قطعی" value={analysis.totals.confirmed} hint={`${fa(analysis.totals.nights)} شب‌اقامت`} tone="green"/><SupplyMetric icon={AlertTriangle} title="رزرو غیرقطعی" value={analysis.totals.unconfirmed} hint="نیازمند پیگیری" tone="orange"/><SupplyMetric icon={BarChart3} title="ترافیک" value={analysis.totals.traffic} hint="از Analytics" tone="purple"/><SupplyMetric icon={CircleDollarSign} title="فروش" value={analysis.totals.gross} hint="جمع فایل‌های فروش" tone="cyan" money/></section><section className="supplyGridV23"><article className="supplyPanelV23 span2"><PanelHead eyebrow="CEO ACTION LIST" title="Top هتل‌های نیازمند اقدام" action="خروجی CSV" onAction={exportManagerReport}/><HotelRows rows={analysis.withIssues.slice(0,12)} users={users} ownerDraft={ownerDraft} setOwnerDraft={setOwnerDraft} onSelect={h=>{setSelectedHotelKey(h.key);setTab('profile')}} onTask={createTaskForHotel}/></article><article className="supplyPanelV23"><PanelHead eyebrow="DATA READINESS" title="وضعیت ۷ فایل اصلی"/><FileReadiness files={analysis.files}/></article></section></>}
 
-    {tab==='online'&&<section className="supplyGridV23">
-      <article className="supplyPanelV23 span3"><PanelHead eyebrow="MAXIMUM ONLINE" title="نقشه راه حداکثر آنلاین‌سازی" action="قابلیت و اولویت Provider" onAction={()=>setView?.('hotelSuperApp')}/><div className="onlineFormulaV23"><span><b>{settings.capacityWeight}٪</b> ظرفیت</span><span><b>{settings.rateWeight}٪</b> نرخ</span><span><b>{fa(analysis.manual)}</b> آنلاین دستی و زمان‌بر</span><span><b>{fa(analysis.multiProvider)}</b> دارای بیش از یک گزینه</span></div><div className="migrationTableV23"><header><span>هتل</span><span>Provider فعلی</span><span>وضعیت فعلی</span><span>بهترین گزینه</span><span>بهبود</span><span>اقدام</span></header>{analysis.hotelRows.filter(h=>h.active&&(h.recommendation||h.onlineScore<100)).sort((a,b)=>(b.recommendation?.score||0)-b.automatedScore-((a.recommendation?.score||0)-a.automatedScore)).slice(0,120).map(h=><div key={h.id}><span><b>{h.title}</b><small>{h.city||'بدون شهر'} · {h.hotel_code||'بدون کد'}</small></span><span>{h.provider}</span><span><OnlinePills hotel={h}/></span><span>{h.recommendation?.provider||'بدون گزینه بهتر'}<small>{h.eligibleProviders.length?`${h.eligibleProviders.length} Provider واجدشرایط`:''}</small></span><strong className={h.recommendation?.score>h.automatedScore?'good':''}>{h.recommendation?`+${Math.max(0,h.recommendation.score-h.automatedScore)}٪`:'—'}</strong><button onClick={()=>onCreateTask?.(h,{title:`آنلاین‌سازی ${h.title}${h.recommendation?` روی ${h.recommendation.provider}`:''}`,category:'آنلاین‌سازی',priority:h.capacityOnline?'متوسط':'فوری'})}>ساخت تسک</button></div>)}</div></article>
-    </section>}
+    {tab==='inbox'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="DATA INBOX" title="ورود ۷ فایل واقعی تحلیل رزرو و زنجیره تأمین"/><div className="dataImportGridV23">{EXACT_FILE_SLOTS.map(slot=>{const state=exactFiles.find(item=>item.key===slot.key);const Icon=slot.icon;return <button key={slot.key} className={`importCardV23 ${state?.ok?'ready':''}`} onClick={()=>fileInputs.current[slot.key]?.click()}><i><Icon/></i><span><b>{slot.title}</b><small>{slot.desc}</small><em>{state?.ok?`آپلود شده · ${fa(state.rows)} ردیف`:(slot.required?'الزامی · انتخاب فایل':'اختیاری · انتخاب فایل')}</em></span><Upload/></button>})}</div><p className="formulaNoteV23">بعد از آپلود، داده خام در Supabase ذخیره می‌شود و همین داشبورد، پروفایل هتل، KPI، تسک و خروجی‌ها از یک منبع مشترک تغذیه می‌شوند.</p>{EXACT_FILE_SLOTS.map(slot=><input key={slot.key} ref={el=>{fileInputs.current[slot.key]=el}} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>void importExactFile(slot,e.target.files?.[0])}/>)}</article></section>}
 
-    {tab==='financial'&&<>
-      <section className="supplyMetricsV23"><SupplyMetric icon={CircleDollarSign} title="فروش ثبت‌شده" value={salesSummary.gross} hint={`${fa(salesSummary.margin)} مارجین`} tone="green" money/><SupplyMetric icon={Hotel} title="شب اقامت" value={salesSummary.nights} hint="در داده واردشده" tone="blue"/><SupplyMetric icon={CheckCircle2} title="رزرو قطعی" value={salesSummary.confirmed} hint={`${fa(salesSummary.unconfirmed)} غیرقطعی`} tone="cyan"/><SupplyMetric icon={Target} title="نرخ قطعیت" value={percent(salesSummary.confirmed,salesSummary.confirmed+salesSummary.unconfirmed)} hint="رزرو قطعی از کل" tone="purple" suffix="٪"/></section>
-      <section className="supplyGridV23"><article className="supplyPanelV23 span2"><PanelHead eyebrow="CASH-FLOW" title="طبقه‌بندی بازه مؤثر کش‌فلو"/><p className="formulaNoteV23">بازه مؤثر = نصف دوره خرید + دوره پرداخت؛ مدل «به محض ثبت رزرو» مستقیماً سطح F است.</p><div className="financialBandsV23">{analysis.finances.map(row=><button key={row.level}><b>{row.level}</b><span>{FINANCIAL_LEVELS.find(x=>x.level===row.level)?.title||'Immediate Payment'}</span><strong>{fa(row.count)}</strong><i style={{width:`${percent(row.count,hotels.length)}%`}}/></button>)}</div></article><article className="supplyPanelV23"><PanelHead eyebrow="CONTRACT WATCH" title="قرارداد و وضعیت رو به پایان"/><div className="compactHotelListV23">{analysis.expiring.slice(0,12).map(h=><button key={h.id} onClick={()=>onCreateTask?.(h,{title:`پیگیری قرارداد ${h.title}`,category:'قرارداد',priority:daysUntil(h.status_end_date)<15?'فوری':'بالا'})}><span><b>{h.title}</b><small>{h.provider||'بدون Provider'}</small></span><strong>{fa(daysUntil(h.status_end_date))} روز</strong></button>)}{!analysis.expiring.length&&<Empty text="موردی در ۴۵ روز آینده ثبت نشده است."/>}</div></article></section>
-    </>}
+    {tab==='hotels'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="HOTEL RISK RADAR" title="هتل‌ها بر اساس ریسک و فرصت" action="خروجی CSV" onAction={exportManagerReport}/><div className="supplySearchBarV23"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="جستجو در نام هتل، شهر، Provider، دسته‌بندی..."/></div><HotelRows rows={filteredHotels} users={users} ownerDraft={ownerDraft} setOwnerDraft={setOwnerDraft} onSelect={h=>{setSelectedHotelKey(h.key);setTab('profile')}} onTask={createTaskForHotel}/></article></section>}
 
-    {tab==='performance'&&<section className="supplyGridV23">
-      <article className="supplyPanelV23 span2"><PanelHead eyebrow="EXPERT WORKLOAD" title="بار کاری نرخ، ظرفیت و کیفیت خروجی" action="مرکز KPI" onAction={()=>setView?.('kpiCenter')}/><div className="peopleTableV23"><header><span>کارشناس</span><span>ظرفیت</span><span>نرخ</span><span>زمان تخمینی/هفته</span><span>تسک باز / معوق</span><span>امتیاز گزارش</span></header>{people.map((row,index)=><div key={row.user.id}><span className="personV23"><i>{row.user.avatar?<img src={row.user.avatar} alt=""/>:row.user.full_name?.slice(0,1)}</i><span><b>{index===0&&row.points>0?'🏆 ':''}{row.user.full_name}</b><small>{row.user.department_name||row.user.team||'بدون دپارتمان'}</small></span></span><b>{fa(row.capacity)}</b><b>{fa(row.rate)}</b><span>{fa(Math.round(row.minutes/60))} ساعت</span><span>{fa(row.open)} / <em className={row.late?'danger':''}>{fa(row.late)}</em></span><strong>{fa(row.points)}</strong></div>)}</div></article>
-      <article className="supplyPanelV23"><PanelHead eyebrow="BLOCKERS" title="موانع باز هتل‌ها" action="ثبت در گزارش کار" onAction={()=>setView?.('workReports')}/><div className="blockerListV23">{openBlockers.slice(0,14).map(row=><article key={row.id}><i className={String(row.severity).includes('critical')||row.severity==='بحرانی'?'critical':''}><AlertTriangle/></i><div><b>{row.title||row.blocker_type}</b><small>{row.hotel_title||'بدون هتل'} · {row.owner_name||'بدون مسئول'}</small></div><span>{row.status||'باز'}</span></article>)}{!openBlockers.length&&<Empty text="مانع بازی ثبت نشده است."/>}</div></article>
-    </section>}
+    {tab==='profile'&&selectedHotel&&<section className="supplyGridV23"><article className="supplyPanelV23 span2"><PanelHead eyebrow="HOTEL 360" title={selectedHotel.title} action="ساخت تسک" onAction={()=>void createTaskForHotel(selectedHotel)}/><HotelProfile h={selectedHotel}/><div className="actionListV23"><button onClick={()=>void logHotelAction(selectedHotel,'تماس/پیگیری با هتل انجام شد')}><Workflow/><span><b>ثبت اقدام سریع</b><small>روی Timeline هتل ذخیره می‌شود</small></span></button>{selectedHotel.actions.map(action=><button key={action} onClick={()=>void createTaskForHotel(selectedHotel,action)}><ListChecks/><span><b>{action}</b><small>تبدیل به تسک و Assign</small></span></button>)}</div></article><article className="supplyPanelV23"><PanelHead eyebrow="TIMELINE" title="وقایع و اقدامات"/><Timeline events={selectedHotel.events}/></article></section>}
 
-    {tab==='data'&&<section className="supplyGridV23">
-      <article className="supplyPanelV23 span2"><PanelHead eyebrow="DATA INBOX" title="ورود ۷ فایل واقعی تحلیل رزرو و زنجیره تأمین"/><div className="dataImportGridV23">
-        {EXACT_FILE_SLOTS.map(slot=>{const state=exactFiles.find(item=>item.key===slot.key);const Icon=slot.icon;return <button key={slot.key} className={`importCardV23 ${state?.ok?'ready':''}`} onClick={()=>exactInputs.current[slot.key]?.click()}><i><Icon/></i><span><b>{slot.title}</b><small>{slot.desc}</small><em>{state?.ok?`آپلود شده · ${fa(state.rows)} ردیف`:(slot.required?'الزامی · انتخاب فایل':'اختیاری · انتخاب فایل')}</em></span><Upload/></button>})}
-      </div><p className="formulaNoteV23">این بخش جایگزین فلو قدیمی Upload است. هر فایل با نام واقعی خودش ذخیره می‌شود، وضعیتش در Supabase نگهداری می‌شود و داده خام برای داشبورد، CRM، KPI، Task Center و QA قابل استفاده می‌ماند.</p>{EXACT_FILE_SLOTS.map(slot=><input key={slot.key} ref={el=>{exactInputs.current[slot.key]=el}} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>void importExactFile(slot,e.target.files?.[0])}/>)}</article>
-      <article className="supplyPanelV23"><PanelHead eyebrow="CALCULATION" title="تنظیم مدل آنلاین و بار کاری"/><div className="supplySettingsV23"><label>وزن ظرفیت (%)<input type="number" min="0" max="100" value={settings.capacityWeight} onChange={e=>setSettings({...settings,capacityWeight:asNumber(e.target.value),rateWeight:Math.max(0,100-asNumber(e.target.value))})}/></label><label>وزن نرخ (%)<input type="number" min="0" max="100" value={settings.rateWeight} onChange={e=>setSettings({...settings,rateWeight:asNumber(e.target.value),capacityWeight:Math.max(0,100-asNumber(e.target.value))})}/></label><label>دقیقه هفتگی هر ظرفیت دستی<input type="number" min="1" value={settings.capacityMinutes} onChange={e=>setSettings({...settings,capacityMinutes:asNumber(e.target.value)})}/></label><label>دقیقه هفتگی هر نرخ دستی<input type="number" min="1" value={settings.rateMinutes} onChange={e=>setSettings({...settings,rateMinutes:asNumber(e.target.value)})}/></label><button className="btn primary full" onClick={saveSupplySettings}><Settings2/> ذخیره مدل محاسبات</button></div></article>
-    </section>}
+    {tab==='team'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="TEAM KPI" title="عملکرد کارشناسان بر اساس هتل، تسک و اقدام" action="خروجی KPI" onAction={exportTeam}/><div className="peopleTableV23"><header><span>کارشناس</span><span>هتل تحت مسئولیت</span><span>تسک باز</span><span>انجام‌شده</span><span>معوق</span><span>اقدام ثبت‌شده</span><span>امتیاز</span></header>{teamKpis.map(row=><div key={row.user.id}><span className="personV23"><i>{row.user.avatar?<img src={row.user.avatar} alt=""/>:row.user.full_name?.slice(0,1)}</i><span><b>{row.user.full_name}</b><small>{row.user.department_name||row.user.team||'بدون دپارتمان'}</small></span></span><b>{fa(row.owned)}</b><b>{fa(row.open)}</b><b>{fa(row.done)}</b><em className={row.late?'danger':''}>{fa(row.late)}</em><span>{fa(row.actions)}</span><strong>{fa(row.score)}</strong></div>)}</div></article></section>}
+
+    {tab==='tasks'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="TASK FLOW" title="ساخت تسک از دل وضعیت هتل"/><HotelRows rows={analysis.withIssues.slice(0,80)} users={users} ownerDraft={ownerDraft} setOwnerDraft={setOwnerDraft} onSelect={h=>{setSelectedHotelKey(h.key);setTab('profile')}} onTask={createTaskForHotel}/></article></section>}
+
+    {tab==='exports'&&<section className="supplyGridV23"><article className="supplyPanelV23 span2"><PanelHead eyebrow="CEO OUTPUT" title="خروجی‌های قابل ارائه"/><div className="actionListV23"><button onClick={exportManagerReport}><Download/><span><b>خروجی هتل‌های نیازمند پیگیری</b><small>Risk, Opportunity, Owner, Next Action</small></span></button><button onClick={exportTeam}><Download/><span><b>خروجی KPI کارشناسان</b><small>Owner, Tasks, Actions, Score</small></span></button><button onClick={()=>makeExport(analysis.rows.map(h=>({hotel:h.title,city:h.city,health:h.health,risk:h.risk,opportunity:h.opportunity,confirmed:h.confirmed,unconfirmed:h.unconfirmed,traffic:h.traffic})),'IHO_supply_all_hotels_status.csv')}><Download/><span><b>خروجی وضعیت کل هتل‌ها</b><small>برای BI یا گزارش مدیریتی</small></span></button></div></article><article className="supplyPanelV23"><PanelHead eyebrow="MANAGEMENT SUMMARY" title="متن آماده کپی"/><pre className="aiBoxV23">{`گزارش زنجیره تأمین ایران‌هتل\nکل هتل‌ها: ${fa(analysis.totals.hotels)}\nهتل‌های نیازمند پیگیری: ${fa(analysis.withIssues.length)}\nهتل‌های بحرانی: ${fa(analysis.critical.length)}\nرزرو قطعی: ${fa(analysis.totals.confirmed)}\nرزرو غیرقطعی: ${fa(analysis.totals.unconfirmed)}\nاقدام پیشنهادی امروز: پیگیری ${analysis.withIssues.slice(0,5).map(h=>h.title).join('، ')}`}</pre></article></section>}
+
+    {tab==='ai'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="AVAL AI ANALYST" title="تحلیل مدیریتی و پیشنهاد اقدام" action={aiLoading?'در حال تحلیل...':'تحلیل کن'} onAction={()=>void runAi()}/><pre className="aiBoxV23">{aiText||'برای تولید تحلیل، ابتدا فایل‌ها را آپلود کن؛ سپس دکمه «تحلیل کن» را بزن تا Aval AI یا تحلیل Rule-based پیشنهاد اقدام بدهد.'}</pre></article></section>}
   </div>
 }
 
 function SupplyMetric({icon:Icon,title,value,hint,tone,money=false,suffix=''}:any){return <article className={`supplyMetricV23 ${tone}`}><i><Icon/></i><span><small>{title}</small><b>{fa(value)}{suffix}</b><em>{hint}{money?' ریال':''}</em></span></article>}
 function PanelHead({eyebrow,title,action,onAction}:any){return <header className="supplyPanelHeadV23"><div><span>{eyebrow}</span><h2>{title}</h2></div>{action&&<button onClick={onAction}>{action}</button>}</header>}
 function Progress({value,label}:any){return <div className="supplyProgressV23"><span>{label}</span><div><i style={{width:`${Math.min(100,value)}%`}}/></div><b>{value}٪</b></div>}
+function FileReadiness({files}:any){return <div className="statusRowsV23">{files.map(({slot,state,rows}:any)=><div key={slot.key}><i style={{background:state?.ok?'#14b8a6':slot.required?'#ef4444':'#f59e0b'}}/><span>{slot.title}</span><b>{state?.ok?'آماده':'ناقص'}</b><small>{state?.ok?`${fa(state.rows||rows)} ردیف`:slot.required?'الزامی':'اختیاری'}</small></div>)}</div>}
+function HotelRows({rows,users,ownerDraft,setOwnerDraft,onSelect,onTask}:any){return <div className="migrationTableV23"><header><span>هتل</span><span>Risk</span><span>Opportunity</span><span>Owner</span><span>علت</span><span>اقدام</span></header>{rows.map((h:HotelInsight)=><div key={h.key}><span><button className="linkBtnV23" onClick={()=>onSelect(h)}><b>{h.title}</b><small>{h.city||'بدون شهر'} · {h.provider||'بدون Provider'}</small></button></span><strong className={h.risk>=70?'danger':h.risk>=45?'warn':'good'}>{h.risk}</strong><strong>{h.opportunity}</strong><span><select value={ownerDraft[h.key]||''} onChange={(e)=>setOwnerDraft((p:any)=>({...p,[h.key]:e.target.value}))}><option value="">انتخاب مسئول</option>{users.filter((u:any)=>u.is_active!==false).map((u:any)=><option key={u.id} value={u.id}>{u.full_name}</option>)}</select><small>{h.capacity_owner||h.rate_owner||'بدون Owner'}</small></span><span>{h.reasons.slice(0,2).join('، ')||'—'}</span><button onClick={()=>onTask(h,h.actions[0],ownerDraft[h.key])}>ساخت تسک</button></div>)}</div>}
+function HotelProfile({h}:any){return <div className="profileGridV23"><SupplyMetric icon={ShieldAlert} title="Risk" value={h.risk} hint={h.reasons[0]||'بدون ریسک اصلی'} tone={h.risk>=70?'red':'orange'}/><SupplyMetric icon={Target} title="Opportunity" value={h.opportunity} hint={h.actions[0]||'اقدام پیشنهادی'} tone="purple"/><SupplyMetric icon={CheckCircle2} title="رزرو قطعی" value={h.confirmed} hint={`${fa(h.nights)} شب‌اقامت`} tone="green"/><SupplyMetric icon={AlertTriangle} title="غیرقطعی" value={h.unconfirmed} hint="نیازمند پیگیری" tone="orange"/><div className="profileFactsV23"><b>وضعیت هتل</b><span>شهر: {h.city||'—'}</span><span>Provider: {h.provider||'—'}</span><span>Caring: {h.caring_category||'—'}</span><span>مسئول ظرفیت: {h.capacity_owner||'—'}</span><span>مسئول نرخ: {h.rate_owner||'—'}</span><span>تسک باز: {fa(h.openTasks)}</span><span>آخرین اقدام: {h.lastEvent?.title||'ثبت نشده'}</span></div></div>}
+function Timeline({events}:any){const rows=[...(events||[])].sort((a,b)=>String(b.occurred_at||b.created_at||'').localeCompare(String(a.occurred_at||a.created_at||''))).slice(0,30);return <div className="timelineV23">{rows.length?rows.map((e:any)=><article key={e.id}><i/><div><b>{e.title}</b><small>{e.actor_name||'سیستم'} · {String(e.occurred_at||e.created_at||'').slice(0,16).replace('T',' ')}</small><p>{e.description}</p></div></article>):<Empty text="هنوز اقدامی برای این هتل ثبت نشده است."/>}</div>}
 function Empty({text}:any){return <div className="supplyEmptyV23"><Sparkles/><span>{text}</span></div>}
-function OnlinePills({hotel}:any){return <div className="onlinePillsV23"><i className={hotel.capacityOnline?'on':''}>ظرفیت</i><i className={hotel.rateOnline?'on':''}>نرخ</i>{(hotel.manualCapacity||hotel.manualRate)&&<i className="manual">دستی</i>}</div>}
-function ImportCard({icon:Icon,title,text,action,onClick}:any){return <button className="importCardV23" onClick={onClick}><i><Icon/></i><span><b>{title}</b><small>{text}</small><em>{action}</em></span><Upload/></button>}
