@@ -18,6 +18,23 @@ function isMissingSchema(error:any){
   return message.includes('schema cache')||message.includes('could not find the table')||message.includes('does not exist')||message.includes('could not find the')||error?.code==='42P01'||error?.code==='42703'||error?.code==='PGRST204'||error?.code==='PGRST205';
 }
 
+function chunks<T>(rows:T[],size:number){
+  const out:T[][]=[];
+  for(let index=0;index<rows.length;index+=size) out.push(rows.slice(index,index+size));
+  return out;
+}
+
+async function runPool<T>(items:T[],limit:number,worker:(item:T,index:number)=>Promise<void>){
+  let cursor=0;
+  const runners=Array.from({length:Math.min(limit,items.length)},async()=>{
+    while(cursor<items.length){
+      const index=cursor++;
+      await worker(items[index],index);
+    }
+  });
+  await Promise.all(runners);
+}
+
 async function loadFallback(table:string){
   const db=getSupabase();
   if(!db) return [];
@@ -63,19 +80,27 @@ export async function saveRows(table:string,rows:any[]){
   const db=getSupabase();
   if(!db) throw new Error('اتصال Supabase برقرار نیست');
   if(!rows.length) return {fallback:false,count:0};
+
+  // Bulk Excel uploads were slow because every file can contain thousands of rows.
+  // Larger chunks + limited parallelism reduce round-trips without overwhelming Supabase/PostgREST.
+  const primaryChunkSize=table==='ihos_settings'?100:900;
+  const primaryConcurrency=table==='ihos_settings'?1:3;
+
   try{
-    for(let index=0;index<rows.length;index+=400){
-      const {error}=await db.from(table).upsert(rows.slice(index,index+400),{onConflict:'id'});
+    const parts=chunks(rows,primaryChunkSize);
+    await runPool(parts,primaryConcurrency,async part=>{
+      const {error}=await db.from(table).upsert(part,{onConflict:'id'});
       if(error) throw error;
-    }
+    });
     return {fallback:false,count:rows.length};
   }catch(error){
     if(!isMissingSchema(error)) throw error;
-    for(let index=0;index<rows.length;index+=100){
-      const fallbackRows=rows.slice(index,index+100).map(row=>({key:`v23:${table}:${row.id}`,value:row,updated_at:nowIso()}));
+    const parts=chunks(rows,200);
+    await runPool(parts,2,async part=>{
+      const fallbackRows=part.map(row=>({key:`v23:${table}:${row.id}`,value:row,updated_at:nowIso()}));
       const {error:fallbackError}=await db.from('ihos_settings').upsert(fallbackRows,{onConflict:'key'});
       if(fallbackError) throw fallbackError;
-    }
+    });
     return {fallback:true,count:rows.length};
   }
 }
