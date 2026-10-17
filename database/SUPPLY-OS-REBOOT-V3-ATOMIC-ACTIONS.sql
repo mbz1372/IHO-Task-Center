@@ -9,6 +9,7 @@ declare
  due date;
  priority_text text;
  task_id uuid;
+ created_ids uuid[]:=ARRAY[]::uuid[];
  created_count integer:=0;
  skipped_count integer:=0;
 begin
@@ -45,9 +46,10 @@ begin
   returning id into task_id;
   insert into public.sco_events(hotel_key,task_id,kind,details,actor)
   values(h,task_id,'assigned','پیگیری واگذار شد: '||title_text,auth.uid());
+  created_ids=array_append(created_ids,task_id);
   created_count=created_count+1;
  end loop;
- return jsonb_build_object('created',created_count,'skipped',skipped_count);
+ return jsonb_build_object('created',created_count,'skipped',skipped_count,'ids',created_ids);
 end; $$;
 revoke all on function public.sco_create_actions(jsonb) from public,anon;
 grant execute on function public.sco_create_actions(jsonb) to authenticated;
