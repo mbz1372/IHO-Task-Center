@@ -42,6 +42,7 @@ function Hint({children}:any){return <div className="sco-hint"><Info size={18}/>
 export default function SupplyOS(){
  const [session,setSession]=useState<Session|null>(null),[userReady,setUserReady]=useState(false),[member,setMember]=useState<Member|null>(null),[loginEmail,setLoginEmail]=useState(''),[loginSent,setLoginSent]=useState(false);
  const [setupName,setSetupName]=useState(''),[activationCode,setActivationCode]=useState('');
+ const [loginPassword,setLoginPassword]=useState('');
  const [view,setView]=useState<View>('today'),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [hotels,setHotels]=useState<H[]>([]),[metrics,setMetrics]=useState<Rollup[]>([]),[tasks,setTasks]=useState<Task[]>([]),[members,setMembers]=useState<Member[]>([]),[imports,setImports]=useState<Import[]>([]),[cases,setCases]=useState<SupplyCase[]>([]);
  const [selected,setSelected]=useState<string|null>(null),[events,setEvents]=useState<Event[]>([]),[filter,setFilter]=useState(''),[city,setCity]=useState('all'),[focus,setFocus]=useState<'all'|'risk'|'opportunity'|'mine'>('risk');
@@ -319,8 +320,19 @@ export default function SupplyOS(){
 
  if(!db)return <main className="sco-auth"><h1>Supply OS</h1><p>متغیرهای اتصال Supabase روی این نسخه تنظیم نشده‌اند.</p></main>;
  if(!userReady)return <main className="sco-auth"><RefreshCw className="sco-spin"/> در حال بررسی ورود...</main>;
- if(!session)return <main className="sco-auth"><div className="sco-authbox"><span className="sco-mark"><Hotel/></span><h1>IranHotel Supply OS</h1><p>زنجیره تأمین را از کار روزانه تا نتیجه مدیریت کن.</p><label>ایمیل سازمانی</label><input type="email" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} placeholder="you@company.com" dir="ltr"/><button onClick={async()=>{setError('');const {error:e}=await db.auth.signInWithOtp({email:loginEmail,emailRedirectTo:location.origin+'/'});if(e)setError(e.message);else setLoginSent(true)}} disabled={!loginEmail.includes('@')}>دریافت لینک ورود</button>{loginSent&&<Hint>لینک ورود به ایمیل ارسال شده؛ پوشه Spam را هم بررسی کن.</Hint>}{error&&<p className="sco-error">{error}</p>}<a href="/account-access" style={{display:'block',textAlign:'center',color:'#087f9f',fontSize:13}}>ورود با رمز عبور / ساخت رمز دائمی بدون ارسال ایمیل</a><small>ورود و اطلاعات کارکنان با Supabase Auth محافظت می‌شود.</small></div></main>;
- if(!member)return <main className="sco-auth"><div className="sco-authbox">
+ if(!session)return <main className="sco-auth"><div className="sco-authbox">
+  <span className="sco-mark"><Hotel/></span><h1>IranHotel Supply OS</h1>
+  <p>با ایمیل و رمز عبور حساب موجودت وارد شو؛ ارسال ایمیل برای ورود روزانه لازم نیست.</p>
+  <label>ایمیل سازمانی</label><input type="email" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} placeholder="you@company.com" dir="ltr" autoComplete="username"/>
+  <label>رمز ورود</label><input type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} dir="ltr" autoComplete="current-password" placeholder="رمز عبور"/>
+  <button disabled={busy||!loginEmail.includes('@')||!loginPassword} onClick={async()=>{setBusy(true);setError('');const {error:e}=await db.auth.signInWithPassword({email:loginEmail.trim(),password:loginPassword});setBusy(false);if(e)setError(e.message);else setLoginPassword('')}}>ورود با رمز عبور</button>
+  <a href="/account-access" style={{fontSize:12,textAlign:'center',color:'#0b7b9a'}}>تنظیم رمز دائمی حساب (بدون ارسال ایمیل، در صورت داشتن نشست فعال)</a>
+  <button className="sco-ghost" disabled={busy||!loginEmail.includes('@')} onClick={async()=>{setBusy(true);setError('');const {error:e}=await db.auth.signInWithOtp({email:loginEmail.trim(),options:{emailRedirectTo:location.origin+'/',shouldCreateUser:false}});setBusy(false);if(e)setError(e.message);else setLoginSent(true)}}>ورود یک‌باره با لینک ایمیل</button>
+  {loginSent&&<Hint>لینک ورود ارسال شد؛ پس از ورود رمز دائمی تعیین کن.</Hint>}
+  {error&&<p className="sco-error">{error}</p>}
+  <small>سقف ارسال ایمیل Supabase ممکن است تکمیل شده باشد. ورود رمزدار از سهمیه ارسال ایمیل استفاده نمی‌کند.</small>
+ </div></main>;
+  if(!member)return <main className="sco-auth"><div className="sco-authbox">
   <span className="sco-mark"><ShieldCheck size={24}/></span>
   <h2>راه‌اندازی فضای تأمین</h2>
   <p>ورود ایمیلی انجام شد. برای فعال‌سازی مدیر اولیه، کد یک‌بارمصرف راه‌اندازی را وارد کن. اعضای بعدی از داخل بخش تیم اضافه می‌شوند.</p>
