@@ -1,5 +1,5 @@
 export type Mode='hotels'|'performance'|'confirmed'|'unconfirmed'|'traffic'|'owners'|'availability';
-export type Column='code'|'name'|'city'|'provider'|'category'|'cooperation_status'|'capacity_owner'|'rate_owner'|'owner'|'owner_type'|'is_online'|'has_rate'|'capacity'|'confirmed'|'unconfirmed'|'lost'|'visits'|'nights'|'revenue'|'profit';
+export type Column='date'|'code'|'name'|'city'|'provider'|'category'|'cooperation_status'|'capacity_owner'|'rate_owner'|'owner'|'owner_type'|'is_online'|'has_rate'|'capacity'|'confirmed'|'unconfirmed'|'lost'|'visits'|'nights'|'revenue'|'profit';
 export type Hotel={hotel_key:string;hotel_code?:string;name:string;city:string;provider?:string;category?:string;cooperation_status?:string;capacity_owner?:string;rate_owner?:string;is_online?:boolean|null;has_rate?:boolean|null;capacity?:number|null;last_action_at?:string|null};
 export type Rollup={hotel_key:string;confirmed_30:number;previous_confirmed:number;unconfirmed_30:number;lost_30:number;visits_30:number;nights_30:number;revenue_30:number;profit_30:number};
 export type Score={risk:number;opportunity:number;reasons:string[];suggestion:string;movement:number|null;needsAction:boolean};
@@ -13,6 +13,7 @@ export const MODES:{id:Mode;label:string;help:string;required?:boolean}[]=[
 {id:'owners',label:'مسئول هتل‌ها',help:'مالک نرخ، مالک ظرفیت یا فایل تخصیص کارشناسان'}
 ];
 export const FIELDS:{key:Column;label:string;aliases:string[]}[]=[
+{key:'date',label:'تاریخ واقعی رزرو / گزارش',aliases:['تاریخ رزرو','تاریخ ثبت','reservation date','bookingdate','booking date','report date','تاریخ گزارش','تاریخ','date']},
 {key:'code',label:'کد یکتای هتل',aliases:['کد هتل','شناسه هتل','hotelcode','hotelid','hotel id','hotel code','کد مرکز']},
 {key:'name',label:'نام هتل',aliases:['نام هتل','نام اقامتگاه','hotel name','hotelname','نام مرکز','نام واحد']},
 {key:'city',label:'شهر',aliases:['شهر','نام شهر','city','cityname']},
@@ -36,10 +37,10 @@ export const FIELDS:{key:Column;label:string;aliases:string[]}[]=[
 ];
 export const FIELD_SETS:Record<Mode,Column[]>={
  hotels:['code','name','city','provider','category','cooperation_status','capacity_owner','rate_owner'],
- performance:['code','name','city','confirmed','unconfirmed','lost','visits','nights','revenue','profit'],
- confirmed:['code','name','city','confirmed','nights','revenue','profit'],
- unconfirmed:['code','name','city','unconfirmed','lost'],
- traffic:['code','name','city','visits'],
+ performance:['date','code','name','city','confirmed','unconfirmed','lost','visits','nights','revenue','profit'],
+ confirmed:['date','code','name','city','confirmed','nights','revenue','profit'],
+ unconfirmed:['date','code','name','city','unconfirmed','lost'],
+ traffic:['date','code','name','city','visits'],
  availability:['code','name','city','is_online','has_rate','capacity'],
  owners:['code','name','city','capacity_owner','rate_owner','owner','owner_type']
 };
@@ -58,6 +59,28 @@ export function keyOf(code:unknown,name:unknown,city:unknown){
  const c=norm(code),n=norm(name),t=norm(city);
  return c?'code:'+c:n?'name:'+n+'@'+t:'';
 }
+
+export function toIsoDate(value:unknown):string|null{
+ const str=clean(value).replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[-.]/g,'/');
+ const m=str.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+ if(!m)return null;
+ const y=Number(m[1]),mo=Number(m[2]),day=Number(m[3]);
+ if(mo<1||mo>12||day<1||day>31)return null;
+ if(y>1700){const d=new Date(Date.UTC(y,mo-1,day));return d.getUTCFullYear()===y&&d.getUTCMonth()===mo-1&&d.getUTCDate()===day?[y,mo,day].map((n,i)=>String(n).padStart(i?2:4,'0')).join('-'):null}
+ if(y<1300||y>1600||day>(mo<=6?31:mo<=11?30:30))return null;
+ let jy=y+1595;
+ let days=-355668+365*jy+Math.floor(jy/33)*8+Math.floor(((jy%33)+3)/4)+day+(mo<7?(mo-1)*31:(mo-7)*30+186);
+ let gy=400*Math.floor(days/146097);days%=146097;
+ if(days>36524){gy+=100*Math.floor(--days/36524);days%=36524;if(days>=365)days++}
+ gy+=4*Math.floor(days/1461);days%=1461;
+ if(days>365){gy+=Math.floor((days-1)/365);days=(days-1)%365}
+ let gm=1,gd=days+1;
+ const leap=(gy%4===0&&gy%100!==0)||gy%400===0;
+ const lengths=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31];
+ for(const len of lengths){if(gd<=len)break;gd-=len;gm++}
+ return [gy,gm,gd].map((n,i)=>String(n).padStart(i?2:4,'0')).join('-');
+}
+
 export function autoMap(headers:string[],mode:Mode):Partial<Record<Column,string>>{
  const used=new Set<string>();const result:Partial<Record<Column,string>>={};
  for(const field of FIELD_SETS[mode]){
