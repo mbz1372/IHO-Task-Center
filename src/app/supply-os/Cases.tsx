@@ -35,8 +35,8 @@ export function CaseQueue({cases,hotelName,onSelect,limit=10}:{cases:SupplyCase[
  </button>):<p className="sco-muted">اختلال بازی وجود ندارد.</p>}
  </section>;
 }
-export function CaseCreate({db,hotel,staff,enabled,onCreated,onClose}:{db:SupabaseClient;hotel:{hotel_key:string;name:string;provider?:string};staff:{user_id:string;full_name:string}[];enabled:boolean;onCreated:()=>void;onClose:()=>void}){
- const [type,setType]=useState('inventory'),[severity,setSeverity]=useState('p2'),[description,setDescription]=useState(''),[assignee,setAssignee]=useState(''),[channel,setChannel]=useState(''),[provider,setProvider]=useState(hotel.provider||''),[impact,setImpact]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+export function CaseCreate({db,hotel,staff,enabled,suggestedAssignee='',onCreated,onClose}:{db:SupabaseClient;hotel:{hotel_key:string;name:string;provider?:string};staff:{user_id:string;full_name:string}[];enabled:boolean;suggestedAssignee?:string;onCreated:()=>void;onClose:()=>void}){
+ const [type,setType]=useState('inventory'),[severity,setSeverity]=useState('p2'),[description,setDescription]=useState(''),[assignee,setAssignee]=useState(suggestedAssignee),[channel,setChannel]=useState(''),[provider,setProvider]=useState(hotel.provider||''),[impact,setImpact]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  if(!enabled)return null;
  const submit=async()=>{if(!assignee||description.trim().length<6)return;setBusy(true);setError('');
  try{const {error}=await db.rpc('sco_create_case',{p_hotel_key:hotel.hotel_key,p_type:type,p_severity:severity,p_description:description.trim(),p_assignee:assignee,p_channel:channel.trim(),p_provider:provider.trim(),p_impact:impact.trim()?Number(impact):null});if(error)throw error;onCreated();onClose();setDescription('');}catch(e:any){setError(e.message||'خطای ذخیره');}finally{setBusy(false)}};
