@@ -326,7 +326,7 @@ export default function SupplyOS(){
     <span>نرخ آنلاین: <strong>{fa(ready.rate)} / {fa(ready.hotel)}</strong></span>
     <span>ظرفیت آنلاین: <strong>{fa(ready.online)} / {fa(ready.hotel)}</strong></span>
     <span>مالک نرخ و ظرفیت: <strong>{fa(ready.owner)} / {fa(ready.hotel)}</strong></span>
-    <span>روزهای دارای فروش: <strong>{ready.sales>0?fa(ready.sales):'ثبت نشده'}</strong></span>
+    <span>هتل‌های دارای شاخص ۳۰روزه: <strong>{ready.sales>0?fa(ready.sales):'ثبت نشده'}</strong></span>
     {isManager&&<button type="button" onClick={()=>{setMode(ready.owner===0?'owners':ready.online===0?'availability':'performance');setView('data')}}>تکمیل داده‌ها <ArrowLeft size={15}/></button>}
    </section>
    {isManager&&bulkCandidates.length>0&&<section className="sco-bulkbar">
