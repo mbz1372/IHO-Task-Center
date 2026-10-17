@@ -127,26 +127,16 @@ export default function SupplyOS(){
   }catch(e:any){setError(e.message)}finally{setBusy(false)}
  }
  async function saveResult(){
-  if(!db||!editingTask||!selection||!session)return;
+  if(!db||!editingTask||!session)return;
   const task=tasks.find(t=>t.id===editingTask);if(!task)return;
-  if(!isManager&&task.assignee!==session.user.id){setError('فقط مسئول این تسک یا مدیر می‌تواند نتیجه را ثبت کند.');return}
   if(resultNote.trim().length<8){setError('نتیجه واقعی اقدام را حداقل در ۸ کاراکتر ثبت کن.');return}
   setBusy(true);setError('');
   try{
-   const update:any={status:taskStatus,last_result:resultNote.trim(),outcome:taskOutcome,updated_at:new Date().toISOString()};
-   if(taskStatus==='done')update.completed_at=new Date().toISOString();
-   else update.completed_at=null;
-   const {error:e}=await db.from('sco_tasks').update(update).eq('id',task.id);if(e)throw e;
-   const now=new Date().toISOString();
-   const [a,b]=await Promise.all([
-    db.from('sco_events').insert({hotel_key:selection.hotel_key,task_id:task.id,kind:taskStatus==='done'?'completed':'progress',details:taskOutcome+' — '+resultNote.trim(),actor:session.user.id}),
-    isManager?db.from('sco_hotels').update({last_action_at:now,updated_at:now}).eq('hotel_key',selection.hotel_key):Promise.resolve({error:null})
-   ]);
-   if(a.error)throw a.error;if(b.error)throw b.error;
-   setResultNote('');setNotice('نتیجه ثبت شد. این اقدام در پرونده هتل و عملکرد کارشناس ذخیره شد.');await refresh();
-  }catch(e:any){setError(e.message)}finally{setBusy(false)}
+   const {error:e}=await db.rpc('sco_record_task_result',{p_task:task.id,p_status:taskStatus,p_outcome:taskOutcome,p_note:resultNote.trim()});
+   if(e)throw e;
+   setResultNote('');setNotice('نتیجه و تاریخچه اقدام با هم ثبت شدند.');await refresh();
+  }catch(e:any){setError('ثبت نتیجه: '+e.message)}finally{setBusy(false)}
  }
-
  async function saveHotelStatus(){
   if(!db||!selection||!isManager||!session)return;
   setBusy(true);setError('');
@@ -197,6 +187,8 @@ export default function SupplyOS(){
  async function startImport(){
   if(!db||!isManager||!raw.current.length)return;
   if(!mapping.code&&!mapping.name){setError('ستون کد هتل یا نام هتل باید انتخاب شود.');return}
+  const allowed=FIELD_SETS[mode].filter(x=>x!=='code'&&x!=='name'&&x!=='city');
+  if(mode!=='hotels'&&!allowed.some(x=>!!mapping[x])){setError('حداقل یک ستون اطلاعاتی مثل فروش، بازدید، مالک، نرخ یا ظرفیت را مشخص کن.');return}
   if(mode==='hotels'&&!mapping.name){setError('برای فهرست پایه، ستون نام هتل ضروری است.');return}
   setBusy(true);setError('');setImportSummary(null);setProgress('اعتبارسنجی و تطبیق هتل‌ها...');
   const records=raw.current;const rejected:string[]=[];const accepted=new Map<string,Record<string,any>>();
