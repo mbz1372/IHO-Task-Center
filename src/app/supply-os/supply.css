@@ -124,3 +124,12 @@
 .sco-promo-review button:last-child{background:#b64b54}
 .sco-promo-review button:disabled{opacity:.5;cursor:not-allowed}
 @media(max-width:700px){.sco-promo-row{grid-template-columns:1fr!important}}
+
+.sco-recovery{display:grid;gap:8px}
+.sco-recovery h4{margin:10px 3px 3px;font-size:13px;color:#24536b}
+.sco-recovery>button{width:100%;border:1px solid #e4eff3;background:#fff;border-radius:10px;padding:10px;display:flex;gap:8px;align-items:center;text-align:right;color:#34566d}
+.sco-recovery>button:hover{background:#ecf8fa;border-color:#95d5e4}
+.sco-recovery>button>span:first-child{display:grid;gap:4px;min-width:0;flex:1}
+.sco-recovery>button b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sco-recovery>button small{font-size:10px;color:#8296a1}
+.sco-recovery>button>span:nth-child(2){font-size:10px;color:#117693;background:#eaf6fa;padding:7px;border-radius:7px}
