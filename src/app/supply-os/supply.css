@@ -115,3 +115,12 @@
 .sco-market-form>.sco-primary{justify-self:start}
 @media(max-width:900px){.sco-market-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.sco-market-rows>div{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.sco-market-fields{grid-template-columns:1fr}.sco-market-rows>div{grid-template-columns:1fr}.sco-market-form>.sco-primary{width:100%}}
+
+.sco-commercial .sco-market-form textarea{width:100%;background:white;color:#25495f;border:1px solid #dbe5ed;padding:11px;border-radius:10px;min-height:80px}
+.sco-promo-row{grid-template-columns:minmax(160px,2fr) 1fr 1fr 85px!important}
+.sco-promo-review{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.sco-promo-review input{flex:1;min-width:200px;border:1px solid #d9e8ee;padding:10px;border-radius:9px}
+.sco-promo-review button{border:0;border-radius:9px;background:#0f7b98;color:#fff;padding:10px 15px}
+.sco-promo-review button:last-child{background:#b64b54}
+.sco-promo-review button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:700px){.sco-promo-row{grid-template-columns:1fr!important}}
