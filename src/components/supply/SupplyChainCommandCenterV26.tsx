@@ -7,6 +7,7 @@ import {
   Target,Upload,Users2,Workflow
 } from 'lucide-react';
 import {loadRows,makeId,normalizeFa,nowIso,saveRows,saveSetting} from './storage';
+import {getSupabase} from '@/lib/superapp/supabase';
 
 type Tab='work'|'command'|'data'|'hotels'|'profile'|'tasks'|'team'|'ceo'|'ai';
 type Props={
@@ -68,11 +69,20 @@ export default function SupplyChainCommandCenterV26({hotels=[],tasks=[],users=[]
   const [query,setQuery]=useState(''),[selected,setSelected]=useState(''),[assignDraft,setAssignDraft]=useState<Record<string,string>>({}),[ai,setAi]=useState(''),[aiBusy,setAiBusy]=useState(false);
   const inputs=useRef<Record<string,HTMLInputElement|null>>({});
 
+
+  async function loadSupplyFileSettings(){
+    const db=getSupabase();
+    if(!db)throw new Error('ارتباط با Supabase برقرار نیست');
+    const {data,error}=await db.from('ihos_settings').select('key,value').eq('key','supply_exact_data_files').maybeSingle();
+    if(error)throw error;
+    return data?[data]:[];
+  }
+
   async function refresh(){
     setLoading(true);setError('');
     try{
       const res=await Promise.allSettled([
-        loadRows('ihos_supply_import_runs'),loadRows('ihos_supply_import_rows'),loadRows('ihos_hotel_events'),loadRows('ihos_tasks'),loadRows('ihos_settings','key,value',5000)
+        loadRows('ihos_supply_import_runs'),loadRows('ihos_supply_import_rows'),loadRows('ihos_hotel_events'),loadRows('ihos_tasks'),loadSupplyFileSettings()
       ]);
       const rows=(i:number)=>res[i].status==='fulfilled'?(res[i] as PromiseFulfilledResult<any[]>).value:[];
       setRuns(rows(0));setRawRows(rows(1));setEvents(rows(2));setDbTasks(rows(3));
@@ -244,7 +254,7 @@ export default function SupplyChainCommandCenterV26({hotels=[],tasks=[],users=[]
     {tab==='data'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="DATA INBOX" title="۷ فایل عملیاتی"/><div className="dataImportGridV23">{SLOTS.map(s=>{const st=fileState.find(x=>x.key===s.key);const Icon=s.icon;return <button key={s.key} className={`importCardV23 ${st?.ok?'ready':''}`} onClick={()=>inputs.current[s.key]?.click()}><i><Icon/></i><span><b>{s.title}</b><small>{s.desc}</small><em>{st?.ok?`آپلود شده · ${fa(st.rows)} ردیف`:(s.required?'الزامی':'اختیاری')}</em></span><Upload/></button>})}</div>{SLOTS.map(s=><input key={s.key} ref={el=>{inputs.current[s.key]=el}} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>void importFile(s,e.target.files?.[0])}/>)}</article></section>}
     {tab==='hotels'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="HOTEL RADAR" title="وضعیت همه هتل‌ها" action="خروجی" onAction={exportActions}/><div className="supplySearchBarV23"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="جستجو در هتل، شهر، Provider، دسته‌بندی..."/></div><HotelTable rows={visible} users={users} draft={assignDraft} setDraft={setAssignDraft} onSelect={(h:Insight)=>{setSelected(h.key);setTab('profile')}} onTask={createTask}/></article></section>}
     {tab==='profile'&&selectedHotel&&<section className="supplyGridV23"><article className="supplyPanelV23 span2"><PanelHead eyebrow="HOTEL 360" title={selectedHotel.title} action="ساخت تسک" onAction={()=>void createTask(selectedHotel)}/><Hotel360 h={selectedHotel}/><div className="actionListV23"><button onClick={()=>void logAction(selectedHotel,'تماس با هتل و پیگیری انجام شد')}><Workflow/><span><b>ثبت تماس/پیگیری</b><small>در Timeline هتل ذخیره می‌شود</small></span></button>{selectedHotel.nextActions.map(a=><button key={a} onClick={()=>void createTask(selectedHotel,a)}><ListChecks/><span><b>{a}</b><small>تبدیل به تسک</small></span></button>)}</div></article><article className="supplyPanelV23"><PanelHead eyebrow="TIMELINE" title="اقدامات و وقایع"/><Timeline events={selectedHotel.events}/></article></section>}
-    {tab==='tasks'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="EXECUTION" title="ساخت تسک از روی ریسک هتل"/><HotelTable rows={needAction.slice(0,100)} users={users} draft={assignDraft} setDraft={setAssignDraft} onSelect={(h:Insight)=>{setSelected(h.key);setTab('profile')}} onTask={createTask}/></article></section>}
+    {tab==='tasks'&&<section className="supplyWorkQueueV27"><div className="supplyWorkQueueHeadV27"><div><h2>پیگیری‌های باز تیم</h2><p>هر کار را انتخاب کن تا مستقیم برای ثبت وضعیت و نتیجه به صفحه کار امروز بروی.</p></div><button type="button" onClick={()=>setTab('work')}>برگشت به کار امروز</button></div>{operationalTasks.slice(0,100).map(t=><button key={t.id} type="button" className="supplyWorkTaskV27" onClick={()=>{chooseWorkTask(t);setTab('work')}}><span><b>{t.hotel_title||'بدون هتل'}</b><small>{t.title}</small></span><span>{t.assigned_name||'بدون مسئول'}</span><span>{t.status||'در انتظار انجام'}</span><strong className={daysUntil(t.deadline)<0?'late':''}>{t.deadline||'بدون مهلت'}</strong></button>)}{!operationalTasks.length&&<p className="supplyWorkHintV27">هیچ پیگیری بازی ثبت نشده است.</p>}</section>}
     {tab==='team'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="TEAM ACCOUNTABILITY" title="KPI کارشناسان" action="خروجی KPI" onAction={exportTeam}/><div className="peopleTableV23"><header><span>کارشناس</span><span>هتل</span><span>تسک باز</span><span>انجام‌شده</span><span>معوق</span><span>اقدام</span><span>امتیاز</span></header>{team.map(k=><div key={k.user.id}><span className="personV23"><i>{k.user.full_name?.slice(0,1)}</i><span><b>{k.user.full_name}</b><small>{k.user.department_name||k.user.team||'—'}</small></span></span><b>{fa(k.owned)}</b><b>{fa(k.open)}</b><b>{fa(k.done)}</b><em className={k.late?'danger':''}>{fa(k.late)}</em><span>{fa(k.actions)}</span><strong>{fa(k.score)}</strong></div>)}</div></article></section>}
     {tab==='ceo'&&<section className="supplyGridV23"><article className="supplyPanelV23"><PanelHead eyebrow="CEO REPORT" title="خروجی‌ها"/><div className="actionListV23"><button onClick={exportActions}><Download/><span><b>Top Action List</b><small>برای پیگیری امروز</small></span></button><button onClick={exportTeam}><Download/><span><b>KPI تیم</b><small>عملکرد کارشناسان</small></span></button><button onClick={()=>csv(insights.map(h=>({hotel:h.title,city:h.city,health:h.health,risk:h.risk,opportunity:h.opportunity,confirmed:h.confirmed,unconfirmed:h.unconfirmed,traffic:h.traffic})),'IHO_All_Hotels_Status.csv')}><Download/><span><b>وضعیت کل هتل‌ها</b><small>برای BI</small></span></button></div></article><article className="supplyPanelV23 span2"><PanelHead eyebrow="COPY SUMMARY" title="متن آماده مدیرعامل"/><pre className="aiBoxV23">{`گزارش Supply امروز\nکل هتل‌ها: ${fa(totals.hotels)}\nهتل‌های نیازمند اقدام: ${fa(totals.need)}\nهتل‌های بحرانی: ${fa(totals.critical)}\nرزرو قطعی: ${fa(totals.confirmed)}\nرزرو غیرقطعی: ${fa(totals.unconfirmed)}\nاقدام پیشنهادی: تمرکز روی ${needAction.slice(0,5).map(h=>h.title).join('، ')}`}</pre></article></section>}
     {tab==='ai'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="AI ANALYST" title="تحلیل و پیشنهاد اقدام" action={aiBusy?'در حال تحلیل...':'تحلیل کن'} onAction={()=>void runAi()}/><pre className="aiBoxV23">{ai||'پس از آپلود فایل‌ها، تحلیل مدیریتی و پیشنهاد Assign/Action را اینجا بگیر.'}</pre></article></section>}
