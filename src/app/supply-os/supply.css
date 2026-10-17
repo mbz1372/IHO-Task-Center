@@ -97,3 +97,21 @@
 .sco-case-form select,.sco-case-form input,.sco-case-note textarea{border:1px solid #d9e8ee;border-radius:9px;background:#fff;padding:10px;width:100%;color:#26485d}
 .sco-case-note{margin:12px 0!important}.sco-case-create>.sco-primary{width:100%}
 @media(max-width:650px){.sco-case-row{flex-wrap:wrap}.sco-case-name{min-width:65%}.sco-case-sla{margin-right:auto}.sco-case-form{grid-template-columns:1fr}}
+
+/* Commerce & partner quality intelligence — advanced, hidden from the daily queue */
+.sco-market-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.sco-market-tabs button{display:flex;align-items:center;gap:8px;padding:11px 14px;border:1px solid #dce8ee;border-radius:10px;color:#486d84;background:#f7fafc;font-size:12px}
+.sco-market-tabs button.active{color:white;background:#0d7897;border-color:#0d7897}
+.sco-market-summary{background:#eef8fa;padding:13px;border-radius:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:#436b83}
+.sco-market-summary strong{font-size:19px;color:#16718b}
+.sco-market-rows{display:grid;gap:7px;margin:15px 0}
+.sco-market-rows>div{display:grid;grid-template-columns:minmax(170px,2fr) minmax(130px,1fr) minmax(130px,1fr) minmax(80px,.5fr);gap:10px;align-items:center;background:#fbfcfd;padding:12px;border:1px solid #e7eef2;border-radius:11px;color:#37566c;font-size:11px}
+.sco-market-rows>div>span:first-child{display:grid;gap:6px;min-width:0}.sco-market-rows b{font-size:12px}
+.sco-market-rows small{color:#6c8795;font-size:10px}.sco-market-rows .bad{color:#c33e42}.sco-market-rows .good{color:#13835e}
+.sco-market-form{margin-top:21px;border:1px solid #dde8ef;border-radius:13px;padding:17px;background:#f8fafc;display:grid;gap:12px}
+.sco-market-form>h3{margin:0 0 2px}.sco-market-form label{font-size:11px;font-weight:750;display:grid;gap:6px}
+.sco-market-form input,.sco-market-form select{padding:11px;width:100%;color:#2e5067;border:1px solid #dbe5ed;border-radius:9px;background:white;min-width:0}
+.sco-market-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.sco-market-form>.sco-primary{justify-self:start}
+@media(max-width:900px){.sco-market-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.sco-market-rows>div{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.sco-market-fields{grid-template-columns:1fr}.sco-market-rows>div{grid-template-columns:1fr}.sco-market-form>.sco-primary{width:100%}}
