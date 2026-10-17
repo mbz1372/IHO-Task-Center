@@ -240,17 +240,22 @@ export default function SupplyOS(){
    if(mode!=='hotels'&&actualRejected/records.length>0.2)throw Error('بیش از ۲۰٪ ردیف‌ها به هتل‌ها تطبیق داده نشدند. ابتدا فهرست پایه و ستون‌های کد/نام را بررسی کن. نمونه: '+rejected.slice(0,3).join('، '));
    if(!accepted.size)throw Error('هیچ ردیف معتبری برای ذخیره وجود ندارد.');
    const values=[...accepted.values()];
-   for(let i=0;i<values.length;i+=200){
-    const batch=values.slice(i,i+200);setProgress('در حال ذخیره '+fa(Math.min(values.length,i+batch.length))+' از '+fa(values.length)+' هتل...');
-    if(mode==='hotels'||mode==='availability'||mode==='owners'){
-     if(mode==='hotels'){
-      const {error:e}=await db.from('sco_hotels').upsert(batch,{onConflict:'hotel_key'});if(e)throw e;
-     }else{
-      // Partial updates preserve any columns not supplied in the input.
-      const full=batch.map(row=>{const existing=hotels.find(h=>h.hotel_key===row.hotel_key);return {...existing,...row};});const {error:e}=await db.from('sco_hotels').upsert(full,{onConflict:'hotel_key'});if(e)throw e;
-     }
-    }else{
-     const {error:e}=await db.rpc('sco_upsert_metric_batch',{p_rows:batch});if(e)throw e;
+   const hotelUpdates=mode==='hotels'||mode==='availability'||mode==='owners';
+   if(hotelUpdates){
+    const hotelMap=new Map(hotels.map(h=>[h.hotel_key,h]));
+    for(let i=0;i<values.length;i+=200){
+     const batch=values.slice(i,i+200);
+     setProgress('ذخیره هتل‌ها: '+fa(Math.min(values.length,i+batch.length))+' از '+fa(values.length));
+     const data=mode==='hotels'?batch:batch.map(row=>({...hotelMap.get(row.hotel_key),...row}));
+     const {error:e}=await db.from('sco_hotels').upsert(data,{onConflict:'hotel_key'});if(e)throw e;
+    }
+   }else{
+    for(let i=0;i<values.length;i+=900){
+     const slice=values.slice(i,i+900);
+     const batches=[slice.slice(0,300),slice.slice(300,600),slice.slice(600,900)].filter(x=>x.length);
+     setProgress('ذخیره شاخص‌های هتل/تاریخ: '+fa(Math.min(values.length,i+slice.length))+' از '+fa(values.length));
+     const results=await Promise.all(batches.map(p=>db.rpc('sco_upsert_metric_batch',{p_rows:p})));
+     const failed=results.find(r=>r.error);if(failed?.error)throw failed.error;
     }
    }
    const summary={read:records.length,saved:values.length,rejected:actualRejected,samples:rejected};
@@ -259,7 +264,7 @@ export default function SupplyOS(){
    setProgress('ذخیره کامل شد: '+fa(values.length)+' هتل/رکورد تجمیعی؛ '+fa(actualRejected)+' ردیف نامنطبق.');
    if(logErr)setNotice('داده‌ها ذخیره شدند ولی سابقه آپلود ثبت نشد: '+logErr.message);
    raw.current=[];setHeaders([]);setPreview([]);await refresh();
-  }catch(e:any){setError('آپلود متوقف شد: '+e.message);setProgress('برای جلوگیری از خطا، ستون‌ها و نوع فایل را بررسی کن.')}finally{setBusy(false)}
+  }catch(e:any){setError('آپلود متوقف شد: '+e.message);setProgress('در صورت ثبت بخشی از داده، آپلود مجدد همین فایل/تاریخ بدون دوبرابرشدن شاخص‌ها امکان‌پذیر است.')}finally{setBusy(false)}
  }
 
  if(!db)return <main className="sco-auth"><h1>Supply OS</h1><p>متغیرهای اتصال Supabase روی این نسخه تنظیم نشده‌اند.</p></main>;
