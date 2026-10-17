@@ -75,3 +75,25 @@
 .sco-import-templates button{padding:11px 14px;border-radius:10px;border:1px solid #b7e0e9;background:#f1fafd;color:#126d86;display:flex;align-items:center;gap:7px;font-size:11px;font-weight:750}
 .sco-import-templates button:disabled{opacity:.35;cursor:not-allowed}
 @media(max-width:650px){.sco-import-templates>div{min-width:100%}.sco-import-templates button{flex:1;justify-content:center}}
+
+/* V4: operational incidents and timed escalation */
+.sco-case-queue{border:1px solid #cbdde8;background:#fff;border-radius:18px;margin-bottom:18px;padding:17px;display:grid;gap:7px}
+.sco-case-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:0 3px 7px}
+.sco-case-head span{font:800 10px system-ui;letter-spacing:1.3px;color:#b15826}
+.sco-case-head h3{font-size:16px;margin:5px 0 0}.sco-case-head>strong{font-size:11px;background:#fff3e9;padding:7px;border-radius:8px;color:#ae5a27}
+.sco-case-row{display:flex;align-items:center;gap:11px;padding:12px 10px;width:100%;border:1px solid #eef2f5;background:#fafcfd;border-radius:11px;text-align:right;color:#23445b}
+.sco-case-row:hover{border-color:#81bfd4;background:#f1faff}
+.sco-case-badge{font:800 11px system-ui;letter-spacing:1px;color:#fff;padding:6px 9px;border-radius:7px;background:#6b8797;min-width:40px;text-align:center}
+.sco-case-badge.p0{background:#ae293c}.sco-case-badge.p1{background:#cd6e1a}.sco-case-badge.p2{background:#c7a42c}.sco-case-badge.p3{background:#62899a}
+.sco-case-name{flex:1;display:grid;gap:5px;min-width:0}.sco-case-name>b{font-size:12px}.sco-case-name>small{font-size:11px;color:#667b8a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sco-case-sla{font-size:10px;color:#698494;white-space:nowrap}.sco-case-sla.overdue{color:#ae293c;font-weight:800}
+.sco-case-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.sco-case-actions h3{margin:0 auto 0 0}.sco-case-actions>span{font-size:10px;color:#8a6473}
+.sco-case-actions>button{background:#0d7b9a;border:0;border-radius:9px;color:#fff;padding:9px 11px;font-size:11px}
+.sco-case-mini{display:grid;gap:5px;padding:9px 11px;border-bottom:1px solid #e8edf2;font-size:11px}.sco-case-mini>b{color:#a15730}.sco-case-mini span{line-height:1.8;color:#364b62}.sco-case-mini small{color:#8395a2}
+.sco-case-create{border:1px solid #d6e9ec;background:#f8fbfc;border-radius:14px;padding:14px;margin:14px 0}.sco-case-create-head{display:flex;justify-content:space-between;align-items:center}
+.sco-case-create-head h3{display:flex;align-items:center;gap:8px;margin:0}.sco-case-create-head button{border:0;background:transparent;color:#71899b}
+.sco-case-create>p{font-size:11px;color:#658090;line-height:2}.sco-case-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}
+.sco-case-form label,.sco-case-note{display:grid;gap:6px;font-size:11px;font-weight:700}
+.sco-case-form select,.sco-case-form input,.sco-case-note textarea{border:1px solid #d9e8ee;border-radius:9px;background:#fff;padding:10px;width:100%;color:#26485d}
+.sco-case-note{margin:12px 0!important}.sco-case-create>.sco-primary{width:100%}
+@media(max-width:650px){.sco-case-row{flex-wrap:wrap}.sco-case-name{min-width:65%}.sco-case-sla{margin-right:auto}.sco-case-form{grid-template-columns:1fr}}
