@@ -432,3 +432,44 @@ body{line-height:1.6}.main{min-height:100dvh}.content:focus{outline:none}
 .providerHotelListV21{display:grid;max-height:720px;overflow:auto}.providerHotelListV21>article{display:grid;grid-template-columns:minmax(180px,1fr) 90px 105px auto auto 62px auto 38px;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}.providerHotelIdentityV21{display:grid;gap:2px;min-width:0}.providerHotelIdentityV21 small{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.providerHotelIdentityV21 em{color:var(--color-error);font-size:9px;font-style:normal}.providerHotelListV21 label{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px}.priorityInputV21{width:62px!important}
 @media(max-width:1100px){.onlineKpisV21{grid-template-columns:repeat(3,1fr)}.providerHotelListV21>article{grid-template-columns:1fr 90px 105px auto auto}.providerHotelListV21>article>:nth-child(n+6){grid-row:2}}
 @media(max-width:760px){.onlineKpisV21{grid-template-columns:repeat(2,1fr)}.providerHotelListV21>article{grid-template-columns:1fr 1fr}.providerHotelIdentityV21{grid-column:1/-1}.providerHotelListV21>article>:nth-child(n){grid-row:auto}}
+
+
+/* Supply OS V27: a focused daily workflow, without hiding legacy functionality. */
+.supplyWorkV27{display:grid;gap:20px;padding:4px 0 30px;color:var(--text)}
+.supplyWorkIntroV27{background:linear-gradient(112deg,#102a48,#0b5372);color:#fff;border-radius:22px;padding:24px 28px;display:flex;align-items:center;justify-content:space-between;gap:18px}
+.supplyWorkIntroV27 span{font-size:11px;color:#8de2e4;font-weight:800;letter-spacing:.04em}
+.supplyWorkIntroV27 h1{font-size:clamp(20px,2vw,28px);margin:9px 0;font-weight:850;line-height:1.6}
+.supplyWorkIntroV27 p{margin:0;color:#d1e9f5;font-size:13px}
+.supplyWorkIntroV27>button{background:#fff;color:#123653;border:0;border-radius:13px;padding:12px 16px;font-weight:750;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.supplyWorkStatsV27{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.supplyWorkStatsV27>div{border:1px solid var(--line);border-radius:15px;background:var(--card);padding:14px 17px;display:grid;gap:5px}
+.supplyWorkStatsV27 small{color:var(--muted)}.supplyWorkStatsV27 b{font-size:26px;line-height:1.4}
+.supplyWorkColumnsV27{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:14px;align-items:stretch}
+.supplyWorkPanelV27{border:1px solid var(--line);border-radius:18px;background:var(--card);padding:17px;min-width:0;min-height:440px;display:flex;flex-direction:column;gap:14px}
+.supplyWorkPanelV27>header{display:flex;align-items:center;gap:10px}.supplyWorkPanelV27 h2{margin:0 0 3px;font-size:16px}.supplyWorkPanelV27 header small{color:var(--muted)}
+.supplyStepV27{width:34px;height:34px;display:grid;place-items:center;background:#e6f2ff;color:#175bad;border-radius:12px;font-weight:900;flex-shrink:0}
+.supplyWorkInputV27,.supplyWorkFormV27 input,.supplyWorkFormV27 select,.supplyWorkFormV27 textarea{width:100%;border:1px solid var(--line);border-radius:11px;background:var(--bg);color:var(--text);padding:11px;font-size:13px;min-width:0}
+.supplyWorkHotelsV27{overflow:auto;display:grid;align-content:start;gap:7px;max-height:370px}
+.supplyWorkHotelsV27>button{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:12px;padding:11px 12px;display:flex;justify-content:space-between;gap:9px;text-align:right;align-items:center}
+.supplyWorkHotelsV27>button:hover,.supplyWorkHotelsV27>button.active,.supplyWorkTaskV27:hover,.supplyWorkTaskV27.active{background:var(--soft);border-color:#68a2ef}
+.supplyWorkHotelsV27 button span{display:grid;gap:5px;min-width:0}.supplyWorkHotelsV27 button b{font-size:12px}.supplyWorkHotelsV27 button small{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.supplyWorkHotelsV27 button strong{font-size:15px;color:#d54435}
+.supplyWorkFormV27{display:grid;gap:11px;align-content:start;font-size:13px}
+.supplyWorkFormV27>p{color:var(--muted);margin:0;line-height:1.75}.supplyWorkHotelNameV27{font-size:16px}
+.supplyWorkFormV27 label{display:grid;gap:6px;font-weight:700}
+.supplyWorkFormV27 textarea{resize:vertical;line-height:1.9}
+.supplyWorkPrimaryV27{background:#1668d5;color:#fff;border:0;border-radius:12px;padding:12px 14px;font-weight:800}
+.supplyWorkPrimaryV27:disabled{opacity:.5;cursor:not-allowed}
+.supplyWorkSecondaryV27{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:12px;padding:11px;font-weight:600}
+.supplyWorkHintV27{background:var(--bg);border-radius:13px;padding:20px;color:var(--muted);font-size:13px;line-height:2}
+.supplyWorkQueueV27{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;display:grid;gap:8px;overflow:auto}
+.supplyWorkQueueHeadV27{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
+.supplyWorkQueueHeadV27 h2{margin:0 0 7px;font-size:18px}.supplyWorkQueueHeadV27 p{margin:0;color:var(--muted);font-size:12px}
+.supplyWorkQueueHeadV27>div:last-child{display:flex;gap:6px}.supplyWorkQueueHeadV27 button{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:transparent;color:var(--text)}
+.supplyWorkQueueHeadV27 button.active{background:#155bbb;color:#fff}
+.supplyWorkTaskV27{min-width:650px;display:grid;grid-template-columns:minmax(200px,2fr) 1fr 1fr 105px;align-items:center;gap:12px;padding:11px;border:1px solid var(--line);border-radius:10px;text-align:right;background:transparent;color:var(--text);font-size:12px}
+.supplyWorkTaskV27>span:first-child{display:grid;gap:4px}.supplyWorkTaskV27 small{color:var(--muted)}
+.supplyWorkTaskV27 strong{font-weight:700}.supplyWorkTaskV27 strong.late{color:#e34949}
+.supplyTabsV23 select{max-width:190px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:9px 12px;border-radius:11px}
+@media(max-width:1150px){.supplyWorkColumnsV27{grid-template-columns:1fr 1fr}.supplyWorkColumnsV27>article:last-child{grid-column:1/-1;min-height:220px}}
+@media(max-width:760px){.supplyWorkIntroV27{flex-direction:column;align-items:stretch}.supplyWorkStatsV27{grid-template-columns:repeat(2,minmax(0,1fr))}.supplyWorkColumnsV27{grid-template-columns:1fr}.supplyWorkColumnsV27>article:last-child{grid-column:auto}.supplyWorkPanelV27{min-height:unset}.supplyWorkQueueHeadV27{flex-direction:column;align-items:stretch}.supplyWorkHotelsV27{max-height:320px}}
