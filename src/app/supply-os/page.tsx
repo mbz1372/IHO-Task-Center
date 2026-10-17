@@ -37,6 +37,7 @@ function IconStat({title,value,hint,icon:Icon,color}:any){return <div className=
 function Hint({children}:any){return <div className="sco-hint"><Info size={18}/>{children}</div>}
 export default function SupplyOS(){
  const [session,setSession]=useState<Session|null>(null),[userReady,setUserReady]=useState(false),[member,setMember]=useState<Member|null>(null),[loginEmail,setLoginEmail]=useState(''),[loginSent,setLoginSent]=useState(false);
+ const [setupName,setSetupName]=useState(''),[activationCode,setActivationCode]=useState('');
  const [view,setView]=useState<View>('today'),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [hotels,setHotels]=useState<H[]>([]),[metrics,setMetrics]=useState<Rollup[]>([]),[tasks,setTasks]=useState<Task[]>([]),[members,setMembers]=useState<Member[]>([]),[imports,setImports]=useState<Import[]>([]);
  const [selected,setSelected]=useState<string|null>(null),[events,setEvents]=useState<Event[]>([]),[filter,setFilter]=useState(''),[city,setCity]=useState('all'),[focus,setFocus]=useState<'all'|'risk'|'opportunity'|'mine'>('risk');
@@ -270,7 +271,20 @@ export default function SupplyOS(){
  if(!db)return <main className="sco-auth"><h1>Supply OS</h1><p>متغیرهای اتصال Supabase روی این نسخه تنظیم نشده‌اند.</p></main>;
  if(!userReady)return <main className="sco-auth"><RefreshCw className="sco-spin"/> در حال بررسی ورود...</main>;
  if(!session)return <main className="sco-auth"><div className="sco-authbox"><span className="sco-mark"><Hotel/></span><h1>IranHotel Supply OS</h1><p>زنجیره تأمین را از کار روزانه تا نتیجه مدیریت کن.</p><label>ایمیل سازمانی</label><input type="email" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} placeholder="you@company.com" dir="ltr"/><button onClick={async()=>{setError('');const {error:e}=await db.auth.signInWithOtp({email:loginEmail,emailRedirectTo:location.origin+'/'});if(e)setError(e.message);else setLoginSent(true)}} disabled={!loginEmail.includes('@')}>دریافت لینک ورود</button>{loginSent&&<Hint>لینک ورود به ایمیل ارسال شده؛ پوشه Spam را هم بررسی کن.</Hint>}{error&&<p className="sco-error">{error}</p>}<small>ورود و اطلاعات کارکنان با Supabase Auth محافظت می‌شود.</small></div></main>;
- if(!member)return <main className="sco-auth"><div className="sco-authbox"><ShieldCheck size={32}/><h2>احراز هویت انجام شد</h2><p>برای مشاهده اطلاعات سازمان باید مدیر به این حساب دسترسی بدهد.</p><label>شناسه کاربر (برای مدیر سیستم)</label><code dir="ltr">{session.user.id}</code><button onClick={()=>navigator.clipboard.writeText(session.user.id)}>کپی شناسه</button><button className="sco-ghost" onClick={()=>db.auth.signOut()}>خروج</button></div></main>;
+ if(!member)return <main className="sco-auth"><div className="sco-authbox">
+  <span className="sco-mark"><ShieldCheck size={24}/></span>
+  <h2>راه‌اندازی فضای تأمین</h2>
+  <p>ورود ایمیلی انجام شد. برای فعال‌سازی مدیر اولیه، کد یک‌بارمصرف راه‌اندازی را وارد کن. اعضای بعدی از داخل بخش تیم اضافه می‌شوند.</p>
+  <small>{session.user.email}</small>
+  <label>نام نمایشی مدیر</label><input value={setupName} onChange={e=>setSetupName(e.target.value)} placeholder="نام و نام خانوادگی"/>
+  <label>کد یک‌بارمصرف فعال‌سازی</label><input dir="ltr" autoComplete="off" value={activationCode} onChange={e=>setActivationCode(e.target.value)} placeholder="کد فعال‌سازی"/>
+  <button disabled={busy||setupName.trim().length<2||!activationCode.trim()} onClick={async()=>{
+   setBusy(true);setError('');
+   try{const {error:e}=await db.rpc('sco_claim_first_manager',{p_code:activationCode.trim(),p_name:setupName.trim()});if(e)throw e;setMember({user_id:session.user.id,full_name:setupName.trim(),role:'manager',active:true});setActivationCode('');setNotice('حساب مدیر فعال شد. برای شروع فقط فهرست هتل‌ها را وارد کن.')}catch(e:any){setError(e.message)}finally{setBusy(false)}
+  }}>{busy?'در حال فعال‌سازی...':'فعال‌سازی مدیر و شروع کار'}</button>
+  {error&&<p className="sco-error">{error}</p>}
+  <button className="sco-ghost" onClick={()=>db.auth.signOut()}>خروج از حساب</button>
+ </div></main>;
  return <main className="sco-root">
   <div className="sco-main"><header className="sco-top"><div><small>IRANHOTEL / SUPPLY</small><h1>{({today:'مرکز فرمان امروز',hotels:'رادار هتل‌ها',tasks:'کارهای در جریان',team:'تیم و پاسخگویی',data:'ورود و سلامت داده',report:'گزارش تصمیم‌ساز'} as Record<View,string>)[view]}</h1></div><div className="sco-topactions"><span className="sco-date">{new Date().toLocaleDateString('fa-IR',{weekday:'long',day:'numeric',month:'long'})}</span><button onClick={()=>void refresh()} disabled={loading} aria-label="بروزرسانی"><RefreshCw size={18} className={loading?'sco-spin':''}/></button></div></header>
   <nav className="sco-focused-nav" aria-label="مسیر اصلی کار">
