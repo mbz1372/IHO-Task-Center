@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {loadRows,makeId,normalizeFa,nowIso,saveRows,saveSetting} from './storage';
 
-type Tab='command'|'data'|'hotels'|'profile'|'tasks'|'team'|'ceo'|'ai';
+type Tab='work'|'command'|'data'|'hotels'|'profile'|'tasks'|'team'|'ceo'|'ai';
 type Props={
   hotels?:any[]; tasks?:any[]; users?:any[]; me?:any; setView?:(view:any)=>void;
   onCreateTask?:(hotel:any,input?:any)=>void; onOpenHotelImport?:()=>void;
@@ -62,7 +62,7 @@ function csv(rows:any[],name:string){
 }
 
 export default function SupplyChainCommandCenterV26({hotels=[],tasks=[],users=[],me,onImportAssignments}:Props){
-  const [tab,setTab]=useState<Tab>('command');
+  const [tab,setTab]=useState<Tab>('work');
   const [notice,setNotice]=useState(''),[error,setError]=useState(''),[loading,setLoading]=useState(true);
   const [runs,setRuns]=useState<any[]>([]),[rawRows,setRawRows]=useState<any[]>([]),[events,setEvents]=useState<any[]>([]),[dbTasks,setDbTasks]=useState<any[]>([]),[fileState,setFileState]=useState<any[]>([]);
   const [query,setQuery]=useState(''),[selected,setSelected]=useState(''),[assignDraft,setAssignDraft]=useState<Record<string,string>>({}),[ai,setAi]=useState(''),[aiBusy,setAiBusy]=useState(false);
@@ -127,6 +127,77 @@ export default function SupplyChainCommandCenterV26({hotels=[],tasks=[],users=[]
   const totals=useMemo(()=>({hotels:insights.length,critical:insights.filter(h=>h.risk>=70).length,need:needAction.length,confirmed:insights.reduce((s,h)=>s+h.confirmed,0),unconfirmed:insights.reduce((s,h)=>s+h.unconfirmed,0),traffic:insights.reduce((s,h)=>s+h.traffic,0),sales:insights.reduce((s,h)=>s+h.sales,0)}),[insights,needAction.length]);
   const team=useMemo(()=>users.filter(u=>u.is_active!==false).map(u=>{const name=normalizeFa(u.full_name);const owned=insights.filter(h=>normalizeFa(h.capacityOwner)===name||normalizeFa(h.rateOwner)===name||normalizeFa(h.cityOwner)===name);const assigned=allTasks.filter(t=>t.assigned_to===u.id||normalizeFa(t.assigned_name)===name);const ev=events.filter(e=>e.actor_id===u.id||normalizeFa(e.actor_name)===name);const d=assigned.filter(t=>done(t.status));const late=assigned.filter(t=>!done(t.status)&&t.deadline&&daysUntil(t.deadline)<0);return{user:u,owned:owned.length,open:assigned.length-d.length,done:d.length,late:late.length,actions:ev.length,risk:owned.filter(h=>h.risk>=60).length,score:d.length*3+ev.length+owned.filter(h=>h.health>=75).length*2-late.length*2}}).sort((a,b)=>b.score-a.score),[users,insights,allTasks,events]);
 
+
+  // One operational workflow shared by manager and expert: hotel -> accountable task -> recorded outcome.
+  const [workflowHotel,setWorkflowHotel]=useState('');
+  const [workflowOwner,setWorkflowOwner]=useState('');
+  const [workflowAction,setWorkflowAction]=useState('');
+  const [workflowDeadline,setWorkflowDeadline]=useState(()=>new Date(Date.now()+86400000).toISOString().slice(0,10));
+  const [workflowTask,setWorkflowTask]=useState('');
+  const [workflowStatus,setWorkflowStatus]=useState('در حال پیگیری');
+  const [workflowNote,setWorkflowNote]=useState('');
+  const [workflowQuery,setWorkflowQuery]=useState('');
+  const [workScope,setWorkScope]=useState<'team'|'mine'>('team');
+  const [working,setWorking]=useState(false);
+  const workflowSelected=insights.find(h=>h.key===workflowHotel);
+  const workflowCurrentTask=allTasks.find(t=>t.id===workflowTask);
+  const operationalTasks=useMemo(()=>allTasks.filter(t=>(t.hotel_id||t.hotel_title)&&!done(t.status))
+    .sort((a,b)=>(daysUntil(a.deadline)-daysUntil(b.deadline))||String(b.created_at||'').localeCompare(String(a.created_at||''))),[allTasks]);
+  const scopedTasks=operationalTasks.filter(t=>workScope==='team'||t.assigned_to===me?.id||normalizeFa(t.assigned_name)===normalizeFa(me?.full_name));
+  const workflowCandidates=insights.filter(h=>!workflowQuery||normalizeFa(h.title+' '+(h.city||'')+' '+(h.code||'')).includes(normalizeFa(workflowQuery))).slice(0,24);
+  function chooseWorkHotel(h:Insight){
+    setWorkflowHotel(h.key);setWorkflowTask('');
+    setWorkflowAction(h.nextActions[0]||'بررسی وضعیت و بهبود فروش هتل');
+    const suggested=users.find(u=>normalizeFa(u.full_name)===normalizeFa(h.capacityOwner||h.rateOwner));
+    setWorkflowOwner(suggested?.id||'');setWorkflowNote('');
+  }
+  function chooseWorkTask(t:any){
+    setWorkflowTask(t.id);
+    const related=insights.find(h=>h.id===t.hotel_id||keyText(h.title)===keyText(t.hotel_title));
+    if(related)setWorkflowHotel(related.key);
+    setWorkflowOwner(t.assigned_to||'');setWorkflowAction(t.title||'');
+    setWorkflowStatus(t.status==='در انتظار انجام'?'در حال پیگیری':t.status||'در حال پیگیری');
+    setWorkflowNote('');
+  }
+  async function saveWorkflowTask(){
+    if(!workflowSelected){setError('ابتدا یک هتل انتخاب کن.');return}
+    if(!workflowOwner){setError('برای ساخت کار، مسئول پیگیری را انتخاب کن.');return}
+    if(!workflowAction.trim()){setError('اقدام موردنیاز را بنویس.');return}
+    if(!workflowDeadline){setError('مهلت پیگیری را مشخص کن.');return}
+    const existing=operationalTasks.find(t=>(t.hotel_id===workflowSelected.id||keyText(t.hotel_title)===keyText(workflowSelected.title))&&normalizeFa(t.title)===normalizeFa(workflowAction));
+    if(existing){chooseWorkTask(existing);setNotice('این اقدام قبلاً تسک باز دارد؛ همان تسک برای ادامه پیگیری انتخاب شد.');return}
+    setWorking(true);setError('');setNotice('');
+    try{
+      const time=nowIso(),owner=users.find(u=>u.id===workflowOwner);
+      const task={id:makeId('task'),title:workflowAction.trim(),description:'پیگیری زنجیره تأمین | ریسک '+workflowSelected.risk+' | دلایل: '+workflowSelected.reasons.join('، '),hotel_id:workflowSelected.id,hotel_title:workflowSelected.title,city:workflowSelected.city||'',priority:workflowSelected.risk>=70?'فوری':workflowSelected.risk>=45?'بالا':'متوسط',status:'در انتظار انجام',category:'Supply Follow-up',assigned_to:owner?.id,assigned_name:owner?.full_name,created_by:me?.id||'',deadline:workflowDeadline,source_type:'hotel_risk',source_id:workflowSelected.key,created_at:time,updated_at:time};
+      await saveRows('ihos_tasks',[task]);
+      setDbTasks(prev=>[task,...prev.filter(t=>t.id!==task.id)]);
+      setWorkflowTask(task.id);setWorkflowStatus('در حال پیگیری');
+      const event={id:makeId('event'),hotel_id:workflowSelected.id,hotel_title:workflowSelected.title,event_type:'task_created',title:'واگذاری: '+task.title,description:'مسئول: '+(owner?.full_name||'')+' | مهلت: '+workflowDeadline,actor_id:me?.id,actor_name:me?.full_name,entity_type:'task',entity_id:task.id,occurred_at:time,created_at:time};
+      try{await saveRows('ihos_hotel_events',[event]);setEvents(prev=>[event,...prev])}catch{setNotice('تسک ذخیره شد، اما ثبت رویداد در Timeline ناموفق بود.')}
+      setNotice('تسک به '+(owner?.full_name||'کارشناس')+' واگذار شد. حالا نتیجه پیگیری را ثبت کن.');
+    }catch(e:any){setError('ساخت تسک ناموفق بود: '+(e?.message||'خطای ذخیره'))}finally{setWorking(false)}
+  }
+  async function saveWorkflowOutcome(){
+    const task=workflowCurrentTask;
+    if(!task){setError('ابتدا یک تسک از لیست انتخاب کن.');return}
+    if(!workflowNote.trim()){setError('برای قابل‌پیگیری بودن کار، نتیجه تماس یا اقدام را بنویس.');return}
+    setWorking(true);setError('');setNotice('');
+    try{
+      const time=nowIso(),status=workflowStatus;
+      const updated={...task,status,updated_at:time};
+      await saveRows('ihos_tasks',[updated]);
+      setDbTasks(prev=>[updated,...prev.filter(t=>t.id!==updated.id)]);
+      const outcome={id:makeId('outcome'),task_id:task.id,hotel_id:task.hotel_id,hotel_title:task.hotel_title,outcome_type:done(status)?'completed':status==='در انتظار هتل'?'waiting_hotel':status==='نیاز به پیگیری مدیر'?'escalated':'progress',title:status,description:workflowNote.trim(),actor_id:me?.id,actor_name:me?.full_name,payload:{status,assigned_to:task.assigned_to},occurred_at:time,created_at:time};
+      const event={id:makeId('event'),hotel_id:task.hotel_id,hotel_title:task.hotel_title,event_type:'task_progress',title:task.title+' — '+status,description:workflowNote.trim(),actor_id:me?.id,actor_name:me?.full_name,entity_type:'task',entity_id:task.id,occurred_at:time,created_at:time};
+      const failures=await Promise.allSettled([saveRows('ihos_supply_task_outcomes',[outcome]),saveRows('ihos_hotel_events',[event])]);
+      if(failures[1].status==='fulfilled')setEvents(prev=>[event,...prev]);
+      setWorkflowNote('');
+      setNotice(failures.some(x=>x.status==='rejected')?'وضعیت تسک ذخیره شد، اما بخشی از تاریخچه ثبت نشد.':'نتیجه اقدام ثبت شد و وضعیت کار بروزرسانی شد.');
+      if(done(status))setWorkflowTask('');
+    }catch(e:any){setError('ثبت نتیجه ناموفق بود: '+(e?.message||'خطای ذخیره'))}finally{setWorking(false)}
+  }
+
   async function importFile(slot:Slot,file?:File){
     if(!file)return;setNotice(`در حال خواندن ${slot.name}...`);
     try{
@@ -151,10 +222,23 @@ export default function SupplyChainCommandCenterV26({hotels=[],tasks=[],users=[]
   function exportActions(){csv(needAction.map(h=>({hotel:h.title,city:h.city,provider:h.provider,category:h.category,risk:h.risk,opportunity:h.opportunity,health:h.health,confirmed:h.confirmed,unconfirmed:h.unconfirmed,traffic:h.traffic,capacity_owner:h.capacityOwner,rate_owner:h.rateOwner,next_action:h.nextActions[0],reasons:h.reasons.join(' | ')})),'IHO_Top_Actions.csv')}
   function exportTeam(){csv(team.map(k=>({user:k.user.full_name,owned:k.owned,open_tasks:k.open,done_tasks:k.done,late:k.late,actions:k.actions,risk_hotels:k.risk,score:k.score})),'IHO_Team_KPI.csv')}
   async function runAi(){setAiBusy(true);setAi('');try{const top=needAction.slice(0,20).map(h=>({hotel:h.title,city:h.city,risk:h.risk,opp:h.opportunity,reasons:h.reasons,actions:h.nextActions,owners:{capacity:h.capacityOwner,rate:h.rateOwner},confirmed:h.confirmed,unconfirmed:h.unconfirmed,traffic:h.traffic}));const prompt=`به عنوان تحلیلگر زنجیره تامین ایران‌هتل، براساس داده زیر گزارش مدیریتی کوتاه، ۵ اقدام فوری و پیشنهاد Assign بده: ${JSON.stringify({totals,top})}`;const r=await fetch('/api/avalai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});const d=await r.json();setAi(d.text||'پاسخی دریافت نشد.')}catch{setAi(`تحلیل Rule-based: ${fa(totals.need)} هتل نیازمند پیگیری داریم. ${fa(totals.critical)} مورد بحرانی است. اولویت امروز: پیگیری رزروهای غیرقطعی، تعیین Owner ظرفیت/نرخ و ساخت تسک برای Top 10.`)}finally{setAiBusy(false)}}
-  const tabs:[Tab,string,any][]=[['command','مرکز فرمان',Gauge],['data','ورود داده',Database],['hotels','هتل‌ها',ShieldAlert],['profile','Hotel 360',Hotel],['tasks','تسک‌ها',ListChecks],['team','KPI تیم',Users2],['ceo','گزارش مدیرعامل',Download],['ai','AI',Bot]];
+  const tabs:[Tab,string,any][]=[['work','کار امروز',Gauge],['tasks','پیگیری‌ها',ListChecks],['hotels','هتل‌ها',Hotel],['ceo','گزارش مدیر',Download]];
+  const extraTabs:[Tab,string][]=[['command','داشبورد تحلیلی'],['data','ورود و مدیریت داده'],['profile','پرونده ۳۶۰ هتل'],['team','KPI تیم'],['ai','دستیار AI']];
 
-  return <div className="supplyOSV23"><section className="supplyHeroV23"><div><span>IRANHOTEL SUPPLY CHAIN OS</span><h1>سیستم تصمیم و اجرای زنجیره تأمین</h1><p>داده را می‌گیرد، وضعیت هتل را می‌فهمد، اولویت می‌سازد، تسک می‌دهد، Timeline و KPI را آپدیت می‌کند و گزارش مدیرعامل می‌دهد.</p><div className="supplyHeroActionsV23"><button className="btn primary" onClick={()=>setTab('data')}>آپلود ۷ فایل</button><button className="btn glass" onClick={exportActions}>خروجی Top Action</button><button className="btn glass" onClick={()=>void persistScores()}>ذخیره Snapshot</button></div></div><div className="supplyHealthV23"><div style={{'--supply-score':`${percent(insights.filter(h=>h.health>=75).length,Math.max(1,insights.length))*3.6}deg`} as any}><b>{percent(insights.filter(h=>h.health>=75).length,Math.max(1,insights.length))}٪</b><span>Health</span></div><small>{fa(totals.need)} هتل نیازمند اقدام</small></div></section>
-    <div className="supplyTabsV23">{tabs.map(([id,label,Icon])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon/>{label}</button>)}<button className="refresh" onClick={refresh} disabled={loading}><RefreshCcw className={loading?'spin':''}/> بروزرسانی</button></div>{(error||notice)&&<div className={error?'supplyNoticeV23 danger':'supplyNoticeV23'}>{error||notice}</div>}
+  return <div className="supplyOSV23"><section className="supplyHeroV23" style={tab==='work'?{display:'none'}:undefined}><div><span>IRANHOTEL SUPPLY CHAIN OS</span><h1>سیستم تصمیم و اجرای زنجیره تأمین</h1><p>داده را می‌گیرد، وضعیت هتل را می‌فهمد، اولویت می‌سازد، تسک می‌دهد، Timeline و KPI را آپدیت می‌کند و گزارش مدیرعامل می‌دهد.</p><div className="supplyHeroActionsV23"><button className="btn primary" onClick={()=>setTab('data')}>آپلود ۷ فایل</button><button className="btn glass" onClick={exportActions}>خروجی Top Action</button><button className="btn glass" onClick={()=>void persistScores()}>ذخیره Snapshot</button></div></div><div className="supplyHealthV23"><div style={{'--supply-score':`${percent(insights.filter(h=>h.health>=75).length,Math.max(1,insights.length))*3.6}deg`} as any}><b>{percent(insights.filter(h=>h.health>=75).length,Math.max(1,insights.length))}٪</b><span>Health</span></div><small>{fa(totals.need)} هتل نیازمند اقدام</small></div></section>
+    <div className="supplyTabsV23">{tabs.map(([id,label,Icon])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon/>{label}</button>)}<select aria-label="ابزارهای تکمیلی" value={extraTabs.some(([id])=>id===tab)?tab:''} onChange={e=>setTab(e.target.value as Tab)}><option value="" disabled>ابزارهای تکمیلی</option>{extraTabs.map(([id,label])=><option key={id} value={id}>{label}</option>)}</select><button className="refresh" onClick={refresh} disabled={loading}><RefreshCcw className={loading?'spin':''}/> بروزرسانی</button></div>{(error||notice)&&<div className={error?'supplyNoticeV23 danger':'supplyNoticeV23'}>{error||notice}</div>}
+
+
+    {tab==='work'&&<section className="supplyWorkV27" aria-label="فرآیند کاری زنجیره تأمین">
+      <div className="supplyWorkIntroV27"><div><span>فضای کار روزانه تأمین</span><h1>امروز کدام هتل را بهتر کنیم؟</h1><p>یک هتل انتخاب کن، مسئول و اقدام را مشخص کن، بعد نتیجه را ثبت کن. همین.</p></div><button type="button" onClick={()=>setTab('data')}>مدیریت فایل‌های داده <Upload size={16}/></button></div>
+      <div className="supplyWorkStatsV27"><div><small>هتل نیازمند اقدام</small><b>{fa(needAction.length)}</b></div><div><small>پیگیری باز</small><b>{fa(operationalTasks.length)}</b></div><div><small>پیگیری معوق</small><b>{fa(operationalTasks.filter(t=>daysUntil(t.deadline)<0).length)}</b></div><div><small>اقدام ثبت‌شده</small><b>{fa(events.filter(e=>e.event_type==='task_progress').length)}</b></div></div>
+      <div className="supplyWorkColumnsV27">
+        <article className="supplyWorkPanelV27"><header><span className="supplyStepV27">۱</span><div><h2>هتل را انتخاب کن</h2><small>بر اساس ریسک و فرصت فروش</small></div></header><input className="supplyWorkInputV27" value={workflowQuery} onChange={e=>setWorkflowQuery(e.target.value)} placeholder="جستجوی هتل یا شهر..."/><div className="supplyWorkHotelsV27">{workflowCandidates.map(h=><button key={h.key} type="button" className={workflowHotel===h.key?'active':''} onClick={()=>chooseWorkHotel(h)}><span><b>{h.title}</b><small>{h.city||'بدون شهر'} · {h.reasons[0]||'فرصت بهبود فروش'}</small></span><strong>{h.risk}</strong></button>)}{!workflowCandidates.length&&<p>هتلی پیدا نشد. نام یا شهر دیگری جستجو کن.</p>}</div></article>
+        <article className="supplyWorkPanelV27"><header><span className="supplyStepV27">۲</span><div><h2>پیگیری را واگذار کن</h2><small>کار مشخص، مسئول مشخص، مهلت مشخص</small></div></header>{workflowSelected?<div className="supplyWorkFormV27"><strong className="supplyWorkHotelNameV27">{workflowSelected.title}</strong><p>دلیل اولویت: {workflowSelected.reasons.slice(0,2).join('، ')||'بهبود وضعیت فروش'}</p><label>چه اقدامی لازم است؟<input value={workflowAction} onChange={e=>setWorkflowAction(e.target.value)} placeholder="مثلاً دریافت ظرفیت و اصلاح نرخ"/></label><label>چه کسی پیگیری کند؟<select value={workflowOwner} onChange={e=>setWorkflowOwner(e.target.value)}><option value="">انتخاب کارشناس</option>{users.filter(u=>u.is_active!==false).map(u=><option key={u.id} value={u.id}>{u.full_name}</option>)}</select></label><label>تا چه تاریخی؟<input type="date" value={workflowDeadline} onChange={e=>setWorkflowDeadline(e.target.value)}/></label><button className="supplyWorkPrimaryV27" type="button" disabled={working||!workflowOwner} onClick={()=>void saveWorkflowTask()}>{working?'در حال ذخیره...':'ثبت و واگذاری پیگیری'}</button><button className="supplyWorkSecondaryV27" type="button" onClick={()=>{setSelected(workflowSelected.key);setTab('profile')}}>مشاهده پرونده کامل هتل</button></div>:<div className="supplyWorkHintV27">از ستون اول یک هتل انتخاب کن؛ پیشنهاد اقدام اینجا نمایش داده می‌شود.</div>}</article>
+        <article className="supplyWorkPanelV27"><header><span className="supplyStepV27">۳</span><div><h2>نتیجه را ثبت کن</h2><small>هر پیگیری باید یک خروجی داشته باشد</small></div></header>{workflowCurrentTask?<div className="supplyWorkFormV27"><strong>{workflowCurrentTask.title}</strong><p>{workflowCurrentTask.hotel_title} · مسئول: {workflowCurrentTask.assigned_name||'نامشخص'}</p><label>وضعیت جدید<select value={workflowStatus} onChange={e=>setWorkflowStatus(e.target.value)}>{['در حال پیگیری','در انتظار هتل','نیاز به پیگیری مدیر','انجام شد'].map(v=><option key={v} value={v}>{v}</option>)}</select></label><label>چه اقدامی شد و نتیجه چه بود؟<textarea rows={4} value={workflowNote} onChange={e=>setWorkflowNote(e.target.value)} placeholder="مثلاً تماس انجام شد، هتل ظرفیت آخر هفته را فعال کرد..."/></label><button className="supplyWorkPrimaryV27" type="button" disabled={working||!workflowNote.trim()} onClick={()=>void saveWorkflowOutcome()}>{working?'در حال ثبت...':'ثبت نتیجه و بروزرسانی کار'}</button></div>:<div className="supplyWorkHintV27">بعد از واگذاری کار، همین‌جا نتیجه را ثبت کن؛ یا یک پیگیری باز را از پایین انتخاب کن.</div>}</article>
+      </div>
+      <div className="supplyWorkQueueV27"><div className="supplyWorkQueueHeadV27"><div><h2>پیگیری‌های باز تیم</h2><p>برای ادامه کار روی هر مورد کلیک کن؛ لازم نیست دوباره تسک بسازی.</p></div><div><button type="button" className={workScope==='team'?'active':''} onClick={()=>setWorkScope('team')}>کل تیم</button><button type="button" className={workScope==='mine'?'active':''} onClick={()=>setWorkScope('mine')}>کارهای من</button></div></div>{scopedTasks.slice(0,18).map(t=><button key={t.id} type="button" className={'supplyWorkTaskV27'+(workflowTask===t.id?' active':'')} onClick={()=>chooseWorkTask(t)}><span><b>{t.hotel_title||'بدون هتل'}</b><small>{t.title}</small></span><span>{t.assigned_name||'بدون مسئول'}</span><span>{t.status||'در انتظار انجام'}</span><strong className={daysUntil(t.deadline)<0?'late':''}>{t.deadline||'بدون مهلت'}</strong></button>)}{!scopedTasks.length&&<p className="supplyWorkHintV27">پیگیری بازی در این بخش وجود ندارد.</p>}</div>
+    </section>}
 
     {tab==='command'&&<><Metrics totals={totals}/><section className="supplyGridV23"><article className="supplyPanelV23 span2"><PanelHead eyebrow="TODAY COMMAND" title="Top Action List امروز" action="ساخت ۱۰ تسک اول" onAction={()=>void bulkTop10()}/><HotelTable rows={needAction.slice(0,20)} users={users} draft={assignDraft} setDraft={setAssignDraft} onSelect={(h:Insight)=>{setSelected(h.key);setTab('profile')}} onTask={createTask}/></article><article className="supplyPanelV23"><PanelHead eyebrow="DATA HEALTH" title="وضعیت فایل‌ها"/><FileHealth fileState={fileState}/></article></section></>}
     {tab==='data'&&<section className="supplyGridV23"><article className="supplyPanelV23 span3"><PanelHead eyebrow="DATA INBOX" title="۷ فایل عملیاتی"/><div className="dataImportGridV23">{SLOTS.map(s=>{const st=fileState.find(x=>x.key===s.key);const Icon=s.icon;return <button key={s.key} className={`importCardV23 ${st?.ok?'ready':''}`} onClick={()=>inputs.current[s.key]?.click()}><i><Icon/></i><span><b>{s.title}</b><small>{s.desc}</small><em>{st?.ok?`آپلود شده · ${fa(st.rows)} ردیف`:(s.required?'الزامی':'اختیاری')}</em></span><Upload/></button>})}</div>{SLOTS.map(s=><input key={s.key} ref={el=>{inputs.current[s.key]=el}} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>void importFile(s,e.target.files?.[0])}/>)}</article></section>}
