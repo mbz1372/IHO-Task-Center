@@ -74,8 +74,8 @@ export function score(h:Hotel,m?:Partial<Rollup>,lastAction?:string|null,open=0)
  if(h.is_online===false){risk+=24;opportunity+=20;reasons.push('ظرفیت آنلاین غیرفعال');suggestion='فعال‌سازی ظرفیت آنلاین'}
  if(h.has_rate===false){risk+=20;opportunity+=17;reasons.push('نرخ آنلاین غیرفعال');suggestion='اصلاح و آنلاین‌سازی نرخ'}
  if(h.capacity===0){risk+=15;reasons.push('ظرفیت صفر');suggestion='دریافت ظرفیت جدید'}
- if(!h.capacity_owner){risk+=10;reasons.push('مسئول ظرفیت ندارد')}
- if(!h.rate_owner){risk+=6;reasons.push('مسئول نرخ ندارد')}
+ if(!h.capacity_owner){risk+=13;reasons.push('مسئول ظرفیت ثبت نشده')}
+ if(!h.rate_owner){risk+=12;reasons.push('مسئول نرخ ثبت نشده')}
  if(un>0){risk+=Math.min(22,Math.ceil(un/2));opportunity+=Math.min(30,un*2);reasons.push(un.toLocaleString('fa-IR')+' رزرو غیرقطعی');if(h.is_online!==false)suggestion='پیگیری رزروهای غیرقطعی'}
  if(lost>0){risk+=Math.min(20,lost*3);opportunity+=Math.min(20,lost*2);reasons.push(lost.toLocaleString('fa-IR')+' رزرو از دست‌رفته');suggestion='رفع علت رزروهای از دست‌رفته'}
  if(vis>=40&&conf/vis<0.025){risk+=17;opportunity+=27;reasons.push('بازدید بالا، تبدیل پایین');if(!lost&&!un)suggestion='بررسی رقابت‌پذیری نرخ و ظرفیت'}
