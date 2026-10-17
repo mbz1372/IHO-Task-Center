@@ -67,3 +67,11 @@
 .sco-action-presets button{border:1px solid #dbe9ee;color:#52758a;background:#f8fbfc;border-radius:20px;padding:7px 10px;font-size:10px}
 .sco-action-presets button.active,.sco-action-presets button:hover{color:#fff;background:#107e9a;border-color:#107e9a}
 @media(max-width:800px){.sco-readiness>div:first-child{width:100%}.sco-readiness span{white-space:normal}.sco-bulkpreview{grid-template-columns:1fr}}
+
+.sco-import-templates{display:flex;align-items:center;flex-wrap:wrap;gap:11px;padding:16px;background:#fff;border:1px solid #e3eaf1;border-radius:15px;margin-bottom:17px}
+.sco-import-templates>div{min-width:190px;flex:1}
+.sco-import-templates>div b{font-size:13px;color:#1b526d}
+.sco-import-templates>div p{font-size:11px;color:#667f91;line-height:1.85;margin:6px 0 0}
+.sco-import-templates button{padding:11px 14px;border-radius:10px;border:1px solid #b7e0e9;background:#f1fafd;color:#126d86;display:flex;align-items:center;gap:7px;font-size:11px;font-weight:750}
+.sco-import-templates button:disabled{opacity:.35;cursor:not-allowed}
+@media(max-width:650px){.sco-import-templates>div{min-width:100%}.sco-import-templates button{flex:1;justify-content:center}}
