@@ -38,3 +38,32 @@
 .sco-current-user{font-size:11px;color:#708795;max-width:185px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sco-top{margin-bottom:17px}.sco-hero{padding:28px 33px}.sco-hero h2{font-size:25px}
 @media(max-width:700px){.sco-main{padding:14px 11px 22px}.sco-focused-nav{padding:7px;gap:5px;flex-wrap:wrap}.sco-focused-nav-main{width:100%;justify-content:space-between}.sco-focused-nav-main button{padding:9px 11px;font-size:12px;justify-content:center;flex:1}.sco-focused-nav-tools{width:100%;justify-content:space-between}.sco-focused-nav-tools select{max-width:70%;flex:1}.sco-current-user{display:none}.sco-root{padding-bottom:0!important}.sco-hero{padding:21px}.sco-hero h2{font-size:22px}}
+
+
+/* Supply V3: only the action-critical features worth retaining from the legacy center */
+.sco-readiness{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:#fff;border:1px solid #e4eef1;border-radius:15px;padding:14px 16px;margin-bottom:16px}
+.sco-readiness>div:first-child{display:grid;gap:5px;min-width:185px;margin-left:auto}
+.sco-readiness>div:first-child b{font-size:13px;color:#254a5e}
+.sco-readiness>div:first-child small{font-size:10px;color:#8397a4}
+.sco-readiness span{background:#f2f8fa;border-radius:9px;color:#5c7787;padding:10px;font-size:10px;white-space:nowrap}
+.sco-readiness span strong{color:#166780}
+.sco-readiness>button,.sco-bulkbar>button{background:#0e7997;color:#fff;border:0;border-radius:10px;padding:10px 14px;display:flex;gap:7px;align-items:center;font-size:11px;font-weight:700}
+.sco-bulkbar{background:#e9f5f7;border:1px solid #bde1e8;border-radius:15px;margin-bottom:18px;padding:16px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.sco-bulkbar>div:first-child{display:grid;gap:5px}.sco-bulkbar b{font-size:13px;color:#21506a}.sco-bulkbar small{color:#6c8d9b;font-size:10px}
+.sco-bulkform{width:100%;background:#fff;border-radius:12px;padding:15px;display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.sco-bulkform>p{width:100%;margin:0;font-size:11px;color:#496c80}
+.sco-bulkpreview{width:100%;max-height:100px;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.sco-bulkpreview>span{background:#f4f8fa;border-radius:8px;color:#506d7d;padding:8px;font-size:10px}
+.sco-bulkform label{display:grid;gap:7px;font-size:11px;color:#385c70}
+.sco-bulkform input,.sco-bulkform select{border:1px solid #dfeaf0;padding:10px;border-radius:9px;background:#fbfdfe;color:#264961}
+.sco-bulkform>button{border:0;border-radius:9px;background:#0d7897;color:#fff;padding:11px 15px;font-weight:750;font-size:11px}
+.sco-bulkform>button:disabled{opacity:.5;cursor:not-allowed}
+.sco-hotel-contact{background:#f7fbfc;border-radius:11px;padding:12px}
+.sco-hotel-contact>small{color:#7a909d;font-size:10px;display:block;margin-top:10px}
+.sco-contact-links{display:flex;flex-wrap:wrap;gap:8px}
+.sco-contact-links a{border:1px solid #cce8ef;color:#116a88;background:#fff;text-decoration:none;border-radius:9px;padding:9px 11px;font-size:11px;display:inline-flex;align-items:center;gap:7px}
+.sco-contact-links a:hover{border-color:#0d849f;background:#ecfaff}
+.sco-action-presets{display:flex;flex-wrap:wrap;gap:6px;margin:11px 0}
+.sco-action-presets button{border:1px solid #dbe9ee;color:#52758a;background:#f8fbfc;border-radius:20px;padding:7px 10px;font-size:10px}
+.sco-action-presets button.active,.sco-action-presets button:hover{color:#fff;background:#107e9a;border-color:#107e9a}
+@media(max-width:800px){.sco-readiness>div:first-child{width:100%}.sco-readiness span{white-space:normal}.sco-bulkpreview{grid-template-columns:1fr}}
