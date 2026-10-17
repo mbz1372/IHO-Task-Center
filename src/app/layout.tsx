@@ -3,8 +3,8 @@ import './design-tokens.css';
 import './globals.css';
 
 export const metadata = {
-  title: 'مرکز عملیات و تسک IHO',
-  description: 'سامانه یکپارچه مدیریت هتل، عملیات، تأمین و تسک ایران‌هتل',
+  title: 'مرکز فرمان زنجیره تأمین | ایران‌هتل',
+  description: 'مدیریت ساده زنجیره تأمین ایران‌هتل: اولویت هتل، واگذاری اقدام، ثبت نتیجه و رشد فروش',
   manifest: '/manifest.json',
   icons: { icon: '/favicon.ico', apple: '/apple-touch-icon.png' },
 };
