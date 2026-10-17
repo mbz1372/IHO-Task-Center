@@ -225,7 +225,7 @@ export default function SupplyOS(){
     }
     accepted.set(key,p);
    }
-   const missing=records.length-([...accepted.values()].length); // Per-hotel aggregation is expected, not rejected rows.
+   // Multiple reservations from the same hotel are intentionally aggregated before writing.
    const actualRejected=(()=>{let n=0;for(const r of records){if(mode==='hotels'){if(!clean(get(r,'name')))n++}else if(!matchedHotel(r,lookups))n++}return n})();
    if(mode!=='hotels'&&actualRejected/records.length>0.2)throw Error('بیش از ۲۰٪ ردیف‌ها به هتل‌ها تطبیق داده نشدند. ابتدا فهرست پایه و ستون‌های کد/نام را بررسی کن. نمونه: '+rejected.slice(0,3).join('، '));
    if(!accepted.size)throw Error('هیچ ردیف معتبری برای ذخیره وجود ندارد.');
@@ -237,7 +237,7 @@ export default function SupplyOS(){
       const {error:e}=await db.from('sco_hotels').upsert(batch,{onConflict:'hotel_key'});if(e)throw e;
      }else{
       // Partial updates preserve any columns not supplied in the input.
-      for(const row of batch){const {hotel_key,...patch}=row;const {error:e}=await db.from('sco_hotels').update(patch).eq('hotel_key',hotel_key);if(e)throw e}
+      const full=batch.map(row=>{const existing=hotels.find(h=>h.hotel_key===row.hotel_key);return {...existing,...row};});const {error:e}=await db.from('sco_hotels').upsert(full,{onConflict:'hotel_key'});if(e)throw e;
      }
     }else{
      const ids=batch.map(v=>v.hotel_key);
