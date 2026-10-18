@@ -307,6 +307,20 @@ export default function SupplyOS(){
    const actualRejected=(()=>{let n=0;for(const r of records){if(mode==='hotels'){if(!clean(get(r,'name')))n++}else if(!matchedHotel(r,lookups)||(mode!=='owners'&&mode!=='availability'&&mapping.date&&!toIsoDate(get(r,'date'))))n++}return n})();
    if(mode!=='hotels'&&actualRejected/records.length>0.2)throw Error('بیش از ۲۰٪ ردیف‌ها به هتل‌ها تطبیق داده نشدند. ابتدا فهرست پایه و ستون‌های کد/نام را بررسی کن. نمونه: '+rejected.slice(0,3).join('، '));
    if(!accepted.size)throw Error('هیچ ردیف معتبری برای ذخیره وجود ندارد.');
+   // Convert staff names from Hotel Assignment into immutable user IDs where unambiguous.
+   // Keep the original display name if the staff member has not yet joined the platform.
+   const unmatchedOwners=new Set<string>();
+   if(mode==='owners'||mode==='hotels'){
+    for(const record of accepted.values()){
+     for(const [nameField,idField] of [['capacity_owner','capacity_owner_id'],['rate_owner','rate_owner_id']] as const){
+      const original=clean(record[nameField]||'');
+      if(!original)continue;
+      const matches=staff.filter(p=>norm(p.full_name)===norm(original));
+      if(matches.length===1)record[idField]=matches[0].user_id;
+      else unmatchedOwners.add(original);
+     }
+    }
+   }
    const values=[...accepted.values()];
    const hotelUpdates=mode==='hotels'||mode==='availability'||mode==='owners';
    if(hotelUpdates){
@@ -330,6 +344,7 @@ export default function SupplyOS(){
    const {error:logErr}=await db.from('sco_imports').insert({source:mode,file_name:fileLabel,metric_date:mode==='hotels'||mode==='owners'||mode==='availability'||mapping.date?null:importDate,rows_total:records.length,rows_saved:values.length,rows_rejected:actualRejected,notes:{sample:rejected.slice(0,8),aggregated:true},created_by:session!.user.id});
    setImportSummary(summary);
    setProgress('ذخیره کامل شد: '+fa(values.length)+' هتل/رکورد تجمیعی؛ '+fa(actualRejected)+' ردیف نامنطبق.');
+   if(unmatchedOwners.size)setNotice('داده‌ها ذخیره شدند، اما نام '+fa(unmatchedOwners.size)+' کارشناس هنوز با حساب کاربری یکسان تطبیق ندارد. ابتدا حساب افراد را در بخش تیم بساز و فایل مسئولان را دوباره وارد کن. نمونه: '+[...unmatchedOwners].slice(0,4).join('، '));
    if(logErr)setNotice('داده‌ها ذخیره شدند ولی سابقه آپلود ثبت نشد: '+logErr.message);
    raw.current=[];setHeaders([]);setPreview([]);await refresh();
   }catch(e:any){setError('آپلود متوقف شد: '+e.message);setProgress('در صورت ثبت بخشی از داده، آپلود مجدد همین فایل/تاریخ بدون دوبرابرشدن شاخص‌ها امکان‌پذیر است.')}finally{setBusy(false)}
