@@ -1,6 +1,6 @@
 export type Mode='hotels'|'performance'|'confirmed'|'unconfirmed'|'traffic'|'owners'|'availability';
 export type Column='date'|'code'|'name'|'city'|'provider'|'category'|'cooperation_status'|'capacity_owner'|'rate_owner'|'owner'|'owner_type'|'is_online'|'has_rate'|'capacity'|'confirmed'|'unconfirmed'|'lost'|'visits'|'nights'|'revenue'|'profit';
-export type Hotel={hotel_key:string;hotel_code?:string;name:string;city:string;provider?:string;category?:string;cooperation_status?:string;capacity_owner?:string;rate_owner?:string;capacity_owner_id?:string|null;rate_owner_id?:string|null;commercial_owner_id?:string|null;phone?:string|null;reservation_phone?:string|null;manager_name?:string|null;manager_mobile?:string|null;contract_status?:string|null;purchase_period?:number|null;payment_period?:number|null;contact_import_source?:string|null;is_online?:boolean|null;has_rate?:boolean|null;capacity?:number|null;last_action_at?:string|null};
+export type Hotel={hotel_key:string;hotel_code?:string;name:string;city:string;provider?:string;category?:string;cooperation_status?:string;capacity_owner?:string;rate_owner?:string;capacity_owner_id?:string|null;rate_owner_id?:string|null;commercial_owner_id?:string|null;phone?:string|null;reservation_phone?:string|null;manager_name?:string|null;manager_mobile?:string|null;contract_status?:string|null;purchase_period?:number|null;payment_period?:number|null;contact_import_source?:string|null;is_online?:boolean|null;has_rate?:boolean|null;capacity?:number|null;capacity_verified_at?:string|null;rate_verified_at?:string|null;last_action_at?:string|null};
 export type Rollup={hotel_key:string;confirmed_30:number;previous_confirmed:number;unconfirmed_30:number;lost_30:number;visits_30:number;nights_30:number;revenue_30:number;profit_30:number};
 export type Score={risk:number;opportunity:number;reasons:string[];suggestion:string;movement:number|null;needsAction:boolean};
 export const MODES:{id:Mode;label:string;help:string;required?:boolean}[]=[
@@ -94,9 +94,14 @@ export function autoMap(headers:string[],mode:Mode):Partial<Record<Column,string
 export function score(h:Hotel,m?:Partial<Rollup>,lastAction?:string|null,open=0):Score{
  let risk=0,opportunity=0;const reasons:string[]=[];let suggestion='تماس و به‌روزرسانی وضعیت هتل';
  const conf=Number(m?.confirmed_30||0),prev=Number(m?.previous_confirmed||0),un=Number(m?.unconfirmed_30||0),lost=Number(m?.lost_30||0),vis=Number(m?.visits_30||0),revenue=Number(m?.revenue_30||0);
- if(h.is_online===false){risk+=24;opportunity+=20;reasons.push('ظرفیت آنلاین غیرفعال');suggestion='فعال‌سازی ظرفیت آنلاین'}
- if(h.has_rate===false){risk+=20;opportunity+=17;reasons.push('نرخ آنلاین غیرفعال');suggestion='اصلاح و آنلاین‌سازی نرخ'}
- if(h.capacity===0){risk+=15;reasons.push('ظرفیت صفر');suggestion='دریافت ظرفیت جدید'}
+ const recentlyVerified=(stamp:string|null|undefined,hours:number)=>!!stamp&&Date.now()-new Date(stamp).getTime()<=hours*3600000&&new Date(stamp).getTime()<=Date.now()+3600000;
+ const inventoryFresh=recentlyVerified(h.capacity_verified_at,48);
+ const rateFresh=recentlyVerified(h.rate_verified_at,48);
+ if(h.is_online===false&&inventoryFresh){risk+=24;opportunity+=20;reasons.push('ظرفیت آنلاین غیرفعال (تأییدشده)');suggestion='فعال‌سازی ظرفیت آنلاین'}
+ if(h.has_rate===false&&rateFresh){risk+=20;opportunity+=17;reasons.push('نرخ آنلاین غیرفعال (تأییدشده)');suggestion='اصلاح و آنلاین‌سازی نرخ'}
+ if(h.capacity===0&&inventoryFresh){risk+=15;reasons.push('ظرفیت صفر (تأییدشده)');suggestion='دریافت ظرفیت جدید'}
+ if((h.is_online!==null&&h.is_online!==undefined||h.capacity!==null&&h.capacity!==undefined)&&!inventoryFresh)reasons.push('وضعیت ظرفیت قدیمی یا بدون تاریخ تأیید');
+ if(h.has_rate!==null&&h.has_rate!==undefined&&!rateFresh)reasons.push('وضعیت نرخ قدیمی یا بدون تاریخ تأیید');
  if(!h.capacity_owner){risk+=5;reasons.push('مسئول ظرفیت ثبت نشده')}
  if(!h.rate_owner){risk+=4;reasons.push('مسئول نرخ ثبت نشده')}
  if(un>0){risk+=Math.min(22,Math.ceil(un/2));opportunity+=Math.min(30,un*2);reasons.push(un.toLocaleString('fa-IR')+' رزرو غیرقطعی');if(h.is_online!==false)suggestion='پیگیری رزروهای غیرقطعی'}
@@ -110,7 +115,7 @@ export function score(h:Hotel,m?:Partial<Rollup>,lastAction?:string|null,open=0)
  if(revenue>0)opportunity+=Math.min(15,Math.round(revenue/200000000));
  if(norm(h.category).includes('پیشران')||norm(h.category).includes('کلیدی'))opportunity+=12;
  const movement=prev>0?Math.round((conf-prev)/prev*100):null;
- const supportedProblem=h.is_online===false||h.has_rate===false||h.capacity===0||un>0||lost>0||(vis>=40&&conf/vis<0.025)||(prev>=4&&conf<prev*.65);
+ const supportedProblem=(h.is_online===false&&inventoryFresh)||(h.has_rate===false&&rateFresh)||(h.capacity===0&&inventoryFresh)||un>0||lost>0||(vis>=40&&conf/vis<0.025)||(prev>=4&&conf<prev*.65);
  // Missing assignments alone are data-completeness warnings, not evidence of lost revenue.
  return {risk:Math.min(100,risk),opportunity:Math.min(100,opportunity),reasons,suggestion,movement,needsAction:!!supportedProblem&&(risk>=20||opportunity>=55)};
 }
