@@ -26,16 +26,21 @@ const ACTION_PRESETS=['دریافت ظرفیت آنلاین','اصلاح نرخ 
 const outcomeList=['ظرفیت آنلاین فعال شد','نرخ اصلاح شد','رزرو پیگیری و قطعی شد','قرارداد/همکاری بهبود یافت','پیگیری انجام شد','هتل پاسخ نداد','مانع رفع نشد','سایر'];
 async function getAll(table:string,filter?:(q:any)=>any,cap=12000){
  if(!db)return [];
- const acc:any[]=[];
- for(let offset=0;offset<cap;offset+=1000){
-  let q=db.from(table).select('*');
-  if(filter)q=filter(q);
-  const {data,error}=await q.range(offset,Math.min(cap-1,offset+999));
-  if(error)throw error;
-  acc.push(...(data||[]));
-  if((data||[]).length<1000)break;
+ // Stable ordering is mandatory when fetching more than one PostgREST page.
+ const acc:any[]=[];const size=1000;const parallel=4;
+ for(let base=0;base<cap;base+=size*parallel){
+  const offsets=Array.from({length:Math.min(parallel,Math.ceil((cap-base)/size))},(_,i)=>base+i*size);
+  const chunks=await Promise.all(offsets.map(async offset=>{
+   let q=db.from(table).select('*');
+   if(filter)q=filter(q);
+   const {data,error}=await q.range(offset,Math.min(cap-1,offset+size-1));
+   if(error)throw error;
+   return data||[];
+  }));
+  chunks.forEach(chunk=>acc.push(...chunk));
+  if(chunks.some(chunk=>chunk.length<size))break;
  }
- return acc;
+ return acc.slice(0,cap);
 }
 function dateDelta(day:string|null|undefined){if(!day)return 9999;return Math.floor((new Date(day+'T23:59:59').getTime()-Date.now())/86400000)}
 function IconStat({title,value,hint,icon:Icon,color}:any){return <div className="sco-stat"><span className={'sco-stat-icon '+(color||'')}><Icon size={19}/></span><div><small>{title}</small><strong>{value}</strong><em>{hint}</em></div></div>}
@@ -61,7 +66,7 @@ export default function SupplyOS(){
   if(!db||!member)return;
   setLoading(true);setError('');
   try{
-   const results=await Promise.all([getAll('sco_hotels'),getAll('sco_hotel_rollup',undefined,15000),getAll('sco_tasks',q=>q.order('created_at',{ascending:false}),8000),getAll('sco_members'),getAll('sco_imports',q=>q.order('created_at',{ascending:false}),300),getAll('sco_cases',q=>q.order('created_at',{ascending:false}),4000)]);
+   const results=await Promise.all([getAll('sco_hotels',q=>q.order('hotel_key',{ascending:true}),15000),getAll('sco_hotel_rollup',q=>q.order('hotel_key',{ascending:true}),15000),getAll('sco_tasks',q=>q.order('created_at',{ascending:false}),8000),getAll('sco_members',q=>q.order('user_id',{ascending:true})),getAll('sco_imports',q=>q.order('created_at',{ascending:false}),300),getAll('sco_cases',q=>q.order('created_at',{ascending:false}),4000)]);
    setHotels(results[0] as H[]);setMetrics(results[1] as Rollup[]);setTasks(results[2] as Task[]);setMembers(results[3] as Member[]);setImports(results[4] as Import[]);setCases(results[5] as SupplyCase[]);
   }catch(e:any){setError('خطا در دریافت داده: '+e.message)}finally{setLoading(false)}
  },[member]);
