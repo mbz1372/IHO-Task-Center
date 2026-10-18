@@ -4,6 +4,9 @@ import {createClient,Session} from '@supabase/supabase-js';
 import {Activity,AlertCircle,ArrowLeft,ArrowRight,BarChart3,Building2,Check,CheckCircle2,ChevronLeft,ClipboardCheck,Clock3,CloudUpload,Download,FileSpreadsheet,Phone,Filter,Hotel,Info,LogOut,RefreshCw,Search,ShieldCheck,Sparkles,Target,TrendingDown,TrendingUp,UploadCloud,UserRound,Users,WifiOff,X} from 'lucide-react';
 import {Mode,Column,Hotel as H,Rollup,Score,MODES,FIELDS,FIELD_SETS,autoMap,booleanish,clean,csv,keyOf,norm,num,score,toIsoDate} from './engine';
 import './supply.css';
+import './hub.css';
+import WorkspaceNav from './WorkspaceNav';
+import DataHealth from './DataHealth';
 import {CaseCreate,CaseQueue,SupplyCase} from './Cases';
 import OperationalAudit from './OperationalAudit';
 import MarketTools from './MarketTools';
@@ -59,6 +62,7 @@ export default function SupplyOS(){
  const [firstPass,setFirstPass]=useState(''),[firstPassConfirm,setFirstPassConfirm]=useState('');
  const [view,setView]=useState<View>('today'),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [hotels,setHotels]=useState<H[]>([]),[metrics,setMetrics]=useState<Rollup[]>([]),[tasks,setTasks]=useState<Task[]>([]),[members,setMembers]=useState<Member[]>([]),[imports,setImports]=useState<Import[]>([]),[cases,setCases]=useState<SupplyCase[]>([]);
+ const [legacyImports,setLegacyImports]=useState<{file_key:string;uploaded_file_name?:string|null;rows_count?:number|null;updated_at?:string|null}[]>([]);
  const [selected,setSelected]=useState<string|null>(null),[events,setEvents]=useState<Event[]>([]),[filter,setFilter]=useState(''),[city,setCity]=useState('all'),[focus,setFocus]=useState<'all'|'risk'|'opportunity'|'mine'>('risk');
  const [taskTitle,setTaskTitle]=useState(''),[taskOwner,setTaskOwner]=useState(''),[taskDue,setTaskDue]=useState(today()),[taskOutcome,setTaskOutcome]=useState(outcomeList[0]),[resultNote,setResultNote]=useState(''),[taskStatus,setTaskStatus]=useState<Task['status']>('open'),[editingTask,setEditingTask]=useState<string|null>(null);
  const [bulkOwner,setBulkOwner]=useState(''),[bulkDue,setBulkDue]=useState(today()),[bulkOpen,setBulkOpen]=useState(false),[caseOpen,setCaseOpen]=useState(false);
@@ -73,8 +77,8 @@ export default function SupplyOS(){
   if(!db||!member)return;
   setLoading(true);setError('');
   try{
-   const results=await Promise.all([getAll('sco_hotels',q=>q.order('hotel_key',{ascending:true}),15000),getAll('sco_hotel_rollup',q=>q.order('hotel_key',{ascending:true}),15000),getAll('sco_tasks',q=>q.order('created_at',{ascending:false}),8000),getAll('sco_members',q=>q.order('user_id',{ascending:true})),getAll('sco_imports',q=>q.order('created_at',{ascending:false}),300),getAll('sco_cases',q=>q.order('created_at',{ascending:false}),4000)]);
-   setHotels(results[0] as H[]);setMetrics(results[1] as Rollup[]);setTasks(results[2] as Task[]);setMembers(results[3] as Member[]);setImports(results[4] as Import[]);setCases(results[5] as SupplyCase[]);
+   const results=await Promise.all([getAll('sco_hotels',q=>q.order('hotel_key',{ascending:true}),15000),getAll('sco_hotel_rollup',q=>q.order('hotel_key',{ascending:true}),15000),getAll('sco_tasks',q=>q.order('created_at',{ascending:false}),8000),getAll('sco_members',q=>q.order('user_id',{ascending:true})),getAll('sco_imports',q=>q.order('created_at',{ascending:false}),300),getAll('sco_cases',q=>q.order('created_at',{ascending:false}),4000),getAll('ihos_supply_import_runs',q=>q.order('updated_at',{ascending:false}),30)]);
+   setHotels(results[0] as H[]);setMetrics(results[1] as Rollup[]);setTasks(results[2] as Task[]);setMembers(results[3] as Member[]);setImports(results[4] as Import[]);setCases(results[5] as SupplyCase[]);setLegacyImports(results[6] as any[]);
   }catch(e:any){setError('خطا در دریافت داده: '+e.message)}finally{setLoading(false)}
  },[member]);
  useEffect(()=>{
@@ -404,7 +408,8 @@ export default function SupplyOS(){
   {error&&<p className="sco-error">{error}</p>}
   <button className="sco-ghost" onClick={()=>db.auth.signOut()}>خروج از حساب</button>
  </div></main>;
- return <main className="sco-root">
+ return <main className="sco-root sco-hub">
+  <WorkspaceNav view={view} onView={setView} manager={!!isManager} userName={member.full_name||session.user.email||'کاربر'} openCount={deskOpen.length} lateCount={deskOverdue.length} onLogout={()=>void db!.auth.signOut()}/>
   <div className="sco-main"><header className="sco-top"><div><small>IRANHOTEL / SUPPLY</small><h1>{({today:'مرکز فرمان امروز',hotels:'رادار هتل‌ها',tasks:'کارهای در جریان',team:'تیم و پاسخگویی',data:'ورود و سلامت داده',report:'گزارش تصمیم‌ساز',market:'هوشمندی بازار و تأمین‌کننده',commercial:'تصمیم‌های تجاری و تخفیف'} as Record<View,string>)[view]}</h1></div><div className="sco-topactions"><span className="sco-date">{new Date().toLocaleDateString('fa-IR',{weekday:'long',day:'numeric',month:'long'})}</span><button onClick={()=>void refresh()} disabled={loading} aria-label="بروزرسانی"><RefreshCw size={18} className={loading?'sco-spin':''}/></button></div></header>
   <nav className="sco-focused-nav" aria-label="مسیر اصلی کار">
     <div className="sco-focused-nav-main">
@@ -430,7 +435,7 @@ export default function SupplyOS(){
      <button onClick={()=>{setView('data');setMode('performance')}}><span className={ready.sales>0?'done':''}>{ready.sales>0?<Check size={18}/>:4}</span><div><b>عملکرد و رزروهای ناموفق</b><small>فروش و رزروهای از دست‌رفته با تاریخ واقعی</small></div><ChevronLeft size={17}/></button>
    </div>
   </section>}
-  <CaseQueue cases={isManager?cases:cases.filter(c=>c.assignee===session?.user.id)} hotelName={key=>hotels.find(h=>h.hotel_key===key)?.name||key} onSelect={key=>{const h=scores.find(x=>x.hotel_key===key);if(h)selectHotel(h);}} limit={8}/><section className="sco-hero"><div><span className="sco-eyebrow"><Sparkles size={15}/> زنجیره تأمین نتیجه‌محور</span><h2>{isManager?'امروز کدام هتل را رشد می‌دهیم؟':'امروز کدام پیگیری را به نتیجه می‌رسانی؟'}</h2><p>هتل را انتخاب کن، یک کار مشخص به مسئول بده، نتیجه را ثبت کن؛ فردا اثرش را با داده فروش بسنج.</p><button onClick={()=>{setView(isManager?'hotels':'tasks');setFocus(isManager?'risk':'mine')}}>{isManager?'شروع از هتل‌های اولویت‌دار':'مشاهده پیگیری‌های من'} <ArrowLeft size={17}/></button></div><div className="sco-hero-graph"><b>{fa(scores.filter(h=>h.score.needsAction).length)}</b><small>هتل نیازمند اقدام</small></div></section>
+  <CaseQueue cases={isManager?cases:cases.filter(c=>c.assignee===session?.user.id)} hotelName={key=>hotels.find(h=>h.hotel_key===key)?.name||key} onSelect={key=>{const h=scores.find(x=>x.hotel_key===key);if(h)selectHotel(h);}} limit={8}/><section className="sco-hero"><div><span className="sco-eyebrow"><Sparkles size={15}/> زنجیره تأمین نتیجه‌محور</span><h2>{isManager?'امروز کدام هتل را رشد می‌دهیم؟':'امروز کدام پیگیری را به نتیجه می‌رسانی؟'}</h2><p>هتل را انتخاب کن، یک کار مشخص به مسئول بده، نتیجه را ثبت کن؛ فردا اثرش را با داده فروش بسنج.</p><button onClick={()=>{if(isManager&&tasks.length===0&&scores.length){const h=recoveryQueue[0]||scores[0];selectHotel(h);setTaskTitle('تأیید و تکمیل وضعیت نرخ و ظرفیت آنلاین')}else{setView(isManager?'hotels':'tasks');setFocus(isManager?'risk':'mine')}}}>{isManager&&tasks.length===0?'ساخت اولین اقدام واقعی':isManager?'شروع از هتل‌های اولویت‌دار':'مشاهده پیگیری‌های من'} <ArrowLeft size={17}/></button></div><div className="sco-hero-graph"><b>{fa(scores.filter(h=>h.score.needsAction).length)}</b><small>هتل نیازمند اقدام</small></div></section>
    <div className="sco-stats"><IconStat title="هتل‌های ثبت‌شده" value={fa(hotels.length)} hint="فهرست پایه" icon={Hotel} color="blue"/><IconStat title="پیگیری باز" value={fa(deskOpen.length)} hint={isManager?fa(unassigned.length)+' بدون مسئول':'پیگیری‌های واگذارشده به من'} icon={ClipboardCheck} color="orange"/><IconStat title="کار معوق" value={fa(deskOverdue.length)} hint="نیازمند اقدام امروز" icon={Clock3} color="red"/><IconStat title="کار انجام‌شده" value={fa(deskTasks.filter(t=>t.status==='done').length)} hint="با نتیجه ثبت‌شده" icon={CheckCircle2} color="green"/></div>
    <section className="sco-readiness" aria-label="آمادگی داده برای تصمیم">
     <div><b>کیفیت اطلاعات برای تصمیم‌گیری</b><small>وضعیت نامشخص را ریسک قطعی فروش حساب نمی‌کنیم.</small></div>
@@ -440,6 +445,7 @@ export default function SupplyOS(){
     <span>هتل‌های دارای شاخص ۳۰روزه: <strong>{ready.sales>0?fa(ready.sales):'ثبت نشده'}</strong></span>
     {isManager&&<button type="button" onClick={()=>{setMode(ready.owner===0?'owners':ready.online===0?'availability':'performance');setView('data')}}>تکمیل داده‌ها <ArrowLeft size={15}/></button>}
    </section>
+   {isManager&&<DataHealth legacy={legacyImports} hotels={hotels.length} metrics={metrics.length} tasks={tasks.length} onImport={()=>setView('data')} compact/>}
    {isManager&&bulkCandidates.length>0&&<section className="sco-bulkbar">
      <div><b>برنامه اقدام سریع امروز</b><small>{fa(bulkCandidates.length)} هتل با شواهد قابل پیگیری و بدون تسک باز</small></div>
      <button type="button" onClick={()=>setBulkOpen(v=>!v)}>{bulkOpen?'بستن':'واگذاری گروهی ۱۰ هتل'} <ArrowLeft size={15}/></button>
@@ -467,8 +473,9 @@ export default function SupplyOS(){
   {view==='report'&&isManager&&<div className="sco-report"><div className="sco-reporthead"><span><BarChart3 size={20}/> گزارش روزانه مدیریت</span><button onClick={()=>navigator.clipboard.writeText(compactReport())}><ClipboardCheck size={16}/> کپی گزارش</button></div><pre>{compactReport()}</pre>{isManager&&<section className="sco-ai-brief"><div><b>تحلیل هوشمند روی اطلاعات واقعی امروز</b><small>داده‌های تجمیعی، بدون اطلاعات مهمان، فقط با کلیک تو ارسال می‌شوند.</small></div><button disabled={aiBusy} onClick={()=>void runSupplyAi()}><Sparkles size={16}/>{aiBusy?'در حال تحلیل...':'ساخت Morning Brief با AI'}</button>{aiBrief&&<pre>{aiBrief}</pre>}</section>}<div className="sco-stats"><IconStat icon={Target} title="اقدام‌پذیر" value={fa(scores.filter(h=>h.score.needsAction).length)} hint="بنا به داده موجود"/><IconStat icon={AlertCircle} title="معوق" value={fa(overdue.length)} hint="نیازمند تصمیم مدیر"/><IconStat icon={TrendingDown} title="افت رزرو" value={fa(scores.filter(h=>h.score.movement!==null&&h.score.movement<-35).length)} hint="در مقایسه با دوره قبل"/><IconStat icon={CheckCircle2} title="بسته‌شده" value={fa(tasks.filter(t=>t.status==='done').length)} hint="با ثبت اقدام"/></div><section className="sco-panel"><h3>پنج هتل اول برای اقدام مدیر</h3>{scores.slice(0,5).map(h=><button className="sco-reporthotel" key={h.hotel_key} onClick={()=>selectHotel(h)}><b>{h.name}</b><span>ریسک {fa(h.score.risk)}</span><em>{h.score.suggestion}</em><ChevronLeft size={18}/></button>)}</section></div>}
   {view==='market'&&<MarketTools db={db!} hotels={hotels} isManager={isManager}/>}
   {view==='commercial'&&<CommercialTools db={db!} hotels={hotels} isManager={isManager} userId={session.user.id}/>}
+  {view==='data'&&<DataHealth legacy={legacyImports} hotels={hotels.length} metrics={metrics.length} tasks={tasks.length} onImport={()=>{setMode('performance');document.getElementById('sco-upload-focus')?.scrollIntoView({behavior:'smooth'})}}/>}
   {view==='data'&&<OperationalAudit hotels={hotels} onSelect={key=>{const h=scores.find(x=>x.hotel_key===key);if(h)selectHotel(h)}}/>}
-  {view==='data'&&<div className="sco-data"><div className="sco-dataIntro"><span><CloudUpload size={21}/> ورودی ساده، نتیجه قابل‌اعتماد</span><h2>از یک فایل شروع کن؛ باقی فایل‌ها اختیاری‌اند.</h2><p>هیچ رزرو خامی به دیتابیس فرستاده نمی‌شود؛ اطلاعات پیش از ذخیره در سطح هتل تجمیع می‌شوند.</p></div><section className="sco-import-templates">
+  {view==='data'&&<div className="sco-data" id="sco-upload-focus"><div className="sco-dataIntro"><span><CloudUpload size={21}/> ورودی ساده، نتیجه قابل‌اعتماد</span><h2>از یک فایل شروع کن؛ باقی فایل‌ها اختیاری‌اند.</h2><p>هیچ رزرو خامی به دیتابیس فرستاده نمی‌شود؛ اطلاعات پیش از ذخیره در سطح هتل تجمیع می‌شوند.</p></div><section className="sco-import-templates">
   <div><b>از صفر فایل نساز</b><p>قالب‌ها با کد، نام و شهر همین هتل‌های ثبت‌شده پر شده‌اند. فقط ستون‌های خالی را تکمیل کن؛ خانه خالی اطلاعات قبلی را پاک نمی‌کند.</p></div>
   <button type="button" onClick={()=>csv(hotels.map(h=>({'کد هتل':h.hotel_code||'','نام هتل':h.name,'شهر':h.city,'مسئول ظرفیت':h.capacity_owner||'','مسئول نرخ':h.rate_owner||''})), 'IHO_Hotel_Assignment_Template.csv')} disabled={!hotels.length}><Download size={16}/> قالب مسئولان هتل</button>
   <button type="button" onClick={()=>csv(hotels.map(h=>({'کد هتل':h.hotel_code||'','نام هتل':h.name,'شهر':h.city,'ظرفیت آنلاین':h.is_online==null?'':h.is_online?'بله':'خیر','نرخ آنلاین':h.has_rate==null?'':h.has_rate?'بله':'خیر','ظرفیت':h.capacity??''})), 'IHO_Online_Rate_Capacity_Template.csv')} disabled={!hotels.length}><Download size={16}/> قالب نرخ و ظرفیت</button>
