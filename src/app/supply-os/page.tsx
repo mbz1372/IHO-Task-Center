@@ -77,7 +77,7 @@ export default function SupplyOS(){
   if(!db||!member)return;
   setLoading(true);setError('');
   try{
-   const results=await Promise.all([getAll('sco_hotels',q=>q.order('hotel_key',{ascending:true}),15000),getAll('sco_hotel_rollup',q=>q.order('hotel_key',{ascending:true}),15000),getAll('sco_tasks',q=>q.order('created_at',{ascending:false}),8000),getAll('sco_members',q=>q.order('user_id',{ascending:true})),getAll('sco_imports',q=>q.order('created_at',{ascending:false}),300),getAll('sco_cases',q=>q.order('created_at',{ascending:false}),4000),getAll('ihos_supply_import_runs',q=>q.order('updated_at',{ascending:false}),30)]);
+   const results=await Promise.all([getAll('sco_hotels',q=>q.order('hotel_key',{ascending:true}),15000),getAll('sco_hotel_rollup',q=>q.order('hotel_key',{ascending:true}),15000),getAll('sco_tasks',q=>q.order('created_at',{ascending:false}),8000),getAll('sco_members',q=>q.order('user_id',{ascending:true})),getAll('sco_imports',q=>q.order('created_at',{ascending:false}),300),getAll('sco_cases',q=>q.order('created_at',{ascending:false}),4000),getAll('ihos_supply_import_runs',q=>q.order('updated_at',{ascending:false}),30).catch(()=>[])]);
    setHotels(results[0] as H[]);setMetrics(results[1] as Rollup[]);setTasks(results[2] as Task[]);setMembers(results[3] as Member[]);setImports(results[4] as Import[]);setCases(results[5] as SupplyCase[]);setLegacyImports(results[6] as any[]);
   }catch(e:any){setError('خطا در دریافت داده: '+e.message)}finally{setLoading(false)}
  },[member]);
@@ -138,7 +138,7 @@ export default function SupplyOS(){
   if(focus==='mine'&&!h.tasks.some(t=>t.assignee===session?.user.id&&t.status!=='done'))return false;
   return true;
  });
- const ready={hotel:hotels.length,online:hotels.filter(h=>h.is_online!==null&&h.is_online!==undefined).length,rate:hotels.filter(h=>h.has_rate!==null&&h.has_rate!==undefined).length,owner:hotels.filter(h=>!!h.capacity_owner&&!!h.rate_owner).length,onlineFresh:hotels.filter(h=>h.capacity_verified_at&&Date.now()-new Date(h.capacity_verified_at).getTime()<48*3600000).length,rateFresh:hotels.filter(h=>h.rate_verified_at&&Date.now()-new Date(h.rate_verified_at).getTime()<48*3600000).length,sales:metrics.length,lastSale:imports.filter(i=>['performance','confirmed','unconfirmed','traffic'].includes(i.source)).map(i=>i.created_at).sort().at(-1)||''};
+ const ready={hotel:hotels.length,online:hotels.filter(h=>h.is_online!==null&&h.is_online!==undefined).length,rate:hotels.filter(h=>h.has_rate!==null&&h.has_rate!==undefined).length,owner:hotels.filter(h=>!!h.capacity_owner_id&&!!h.rate_owner_id).length,ownerNames:hotels.filter(h=>!!h.capacity_owner&&!!h.rate_owner).length,onlineFresh:hotels.filter(h=>h.capacity_verified_at&&Date.now()-new Date(h.capacity_verified_at).getTime()<48*3600000).length,rateFresh:hotels.filter(h=>h.rate_verified_at&&Date.now()-new Date(h.rate_verified_at).getTime()<48*3600000).length,sales:metrics.length,lastSale:imports.filter(i=>['performance','confirmed','unconfirmed','traffic'].includes(i.source)).map(i=>i.created_at).sort().at(-1)||''};
  const bulkCandidates=scores.filter(h=>h.score.needsAction&&!h.tasks.some(t=>t.status!=='done')).slice(0,10);
  const callHref=(phone:unknown)=>'tel:'+clean(phone).replace(/[^0-9+]/g,'');
  const teamKpis=staff.map(person=>{
@@ -441,7 +441,7 @@ export default function SupplyOS(){
     <div><b>کیفیت اطلاعات برای تصمیم‌گیری</b><small>وضعیت نامشخص را ریسک قطعی فروش حساب نمی‌کنیم.</small></div>
     <span>نرخ تأییدشده ۴۸ ساعت اخیر: <strong>{fa(ready.rateFresh)} / {fa(ready.hotel)}</strong></span>
     <span>ظرفیت تأییدشده ۴۸ ساعت اخیر: <strong>{fa(ready.onlineFresh)} / {fa(ready.hotel)}</strong></span>
-    <span>مالک نرخ و ظرفیت: <strong>{fa(ready.owner)} / {fa(ready.hotel)}</strong></span>
+    <span>مالک نرخ و ظرفیت متصل به حساب: <strong>{fa(ready.owner)} / {fa(ready.hotel)}</strong></span><span>نام مسئول از فایل پیشین (تأییدنشده): <strong>{fa(ready.ownerNames)}</strong></span>
     <span>هتل‌های دارای شاخص ۳۰روزه: <strong>{ready.sales>0?fa(ready.sales):'ثبت نشده'}</strong></span>
     {isManager&&<button type="button" onClick={()=>{setMode(ready.owner===0?'owners':ready.online===0?'availability':'performance');setView('data')}}>تکمیل داده‌ها <ArrowLeft size={15}/></button>}
    </section>
