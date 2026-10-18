@@ -24,8 +24,8 @@ with unique_hotels as (
  group by uh.hotel_key
 ), updated as (
  update public.sco_hotels h
- set capacity_owner=coalesce(nullif(trim(h.capacity_owner),''),p.capacity_expert),
-     rate_owner=coalesce(nullif(trim(h.rate_owner),''),p.rate_expert),
+ set capacity_owner=coalesce(nullif(trim(h.capacity_owner),''),p.capacity_expert,''),
+     rate_owner=coalesce(nullif(trim(h.rate_owner),''),p.rate_expert,''),
      updated_at=now()
  from pivoted p
  where h.hotel_key=p.hotel_key
