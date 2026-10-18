@@ -10,6 +10,7 @@ type Role=keyof typeof roleColumn;
 export default function TeamActivation({db,token,people,hotels,onRefresh}:{db:SupabaseClient;token:string;people:Person[];hotels:Hotel[];onRefresh:()=>Promise<void>}){
  const [email,setEmail]=useState(''),[name,setName]=useState(''),[created,setCreated]=useState<{email:string;name:string;temporary_password:string}|null>(null);
  const [issue,setIssue]=useState(''),[success,setSuccess]=useState(''),[busy,setBusy]=useState(false);
+ const [googleEmail,setGoogleEmail]=useState(''),[googleName,setGoogleName]=useState('');
  const [role,setRole]=useState<Role>('capacity'),[assignee,setAssignee]=useState(''),[scope,setScope]=useState('priority'),[city,setCity]=useState(''),[query,setQuery]=useState(''),[selected,setSelected]=useState<string[]>([]),[overwrite,setOverwrite]=useState(false);
  const peopleActive=people.filter(p=>p.active);
  const cities=useMemo(()=>[...new Set(hotels.map(h=>h.city).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fa')),[hotels]);
@@ -28,6 +29,15 @@ export default function TeamActivation({db,token,people,hotels,onRefresh}:{db:Su
  const visible=selectable.slice(0,200);
  const conflicts=selected.filter(id=>hotels.find(h=>h.hotel_key===id)?.[roleColumn[role]]).length;
  const newCount=peopleActive.filter(p=>p.role==='expert').length;
+ async function approveGoogle(){
+  setBusy(true);setIssue('');setSuccess('');
+  try{
+   const response=await fetch('/api/supply-team/approve-google',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({email:googleEmail.trim().toLowerCase(),name:googleName.trim()})});
+   const body=await response.json();
+   if(!response.ok)throw Error(body.error||'فعال‌سازی حساب ناموفق بود');
+   setSuccess(body.message||'کارشناس فعال شد.');setGoogleEmail('');setGoogleName('');await onRefresh();
+  }catch(e:any){setIssue(e.message||'خطا در تأیید')}finally{setBusy(false)}
+ }
  async function provision(){
   setBusy(true);setIssue('');setSuccess('');setCreated(null);
   try{
@@ -58,6 +68,15 @@ export default function TeamActivation({db,token,people,hotels,onRefresh}:{db:Su
  const applyFirst=()=>setSelected(visible.slice(0,100).map(h=>h.hotel_key));
  const toggle=(id:string)=>setSelected(old=>old.includes(id)?old.filter(x=>x!==id):old.length>=200?old:[...old,id]);
  return <div className="sco-team-activation">
+  <section className="sco-team-box">
+   <header><ShieldCheck size={20}/><div><h3>تأیید ورود کارشناسان با Google</h3><p>کارشناس یک‌بار با Google وارد می‌شود؛ بدون کد فعال‌سازی، ایمیل دعوت یا رمز موقت. بعد از تأیید مدیر وارد میز کار خودش می‌شود.</p></div></header>
+   <div className="sco-team-onboard">
+    <label>نام و نام خانوادگی<input value={googleName} onChange={e=>setGoogleName(e.target.value)} placeholder="نام کارشناس"/></label>
+    <label>همان ایمیل Google کارشناس<input type="email" dir="ltr" value={googleEmail} onChange={e=>setGoogleEmail(e.target.value)} placeholder="staff@gmail.com"/></label>
+    <button type="button" disabled={busy||googleName.trim().length<3||!googleEmail.includes('@')} onClick={()=>void approveGoogle()}>{busy?'در حال بررسی…':'تأیید و فعال‌سازی کارشناس'}</button>
+   </div>
+   <p className="sco-muted">این روش صرفاً برای کاربر Google تأییدشده‌ای است که قبلاً در سامانه وارد شده است. دسترسی مدیر یا سوپرادمین واگذار نمی‌شود.</p>
+  </section>
   <section className="sco-team-box">
    <header><UserPlus size={20}/><div><h3>راه‌اندازی سریع تیم تأمین</h3><p>مدیر برای کارشناس حساب می‌سازد؛ نیازی به ایمیل دعوت یا شناسه کاربری نیست.</p></div></header>
    <div className="sco-team-overview"><span>{str(newCount)} کارشناس فعال</span><span>{str(hotels.filter(h=>!!h.capacity_owner_id).length)} هتل با مسئول ظرفیت</span><span>{str(hotels.filter(h=>!!h.rate_owner_id).length)} هتل با مسئول نرخ</span></div>
