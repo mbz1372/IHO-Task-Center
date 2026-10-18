@@ -139,3 +139,36 @@
 .sco-ai-brief button{display:flex;gap:8px;align-items:center;color:#fff;background:#0a7998;border:0;border-radius:10px;padding:11px;font-size:11px}
 .sco-ai-brief button:disabled{opacity:.55}
 .sco-ai-brief>pre{white-space:pre-wrap;line-height:2.2;background:#fff;border:1px solid #e0eaf1;border-radius:11px;color:#34566d;padding:16px;width:100%;font-size:12px}
+
+/* V6 — people-first supply operations: one-step expert setup and portfolio ownership */
+.sco-team-activation{display:grid;gap:17px;margin:20px 0}
+.sco-team-box{border:1px solid #ddebf0;border-radius:16px;background:#f9fcfd;padding:19px}
+.sco-team-box>header{display:flex;gap:11px;align-items:flex-start;color:#167d99}.sco-team-box>header h3{font-size:16px;margin:0 0 8px;color:#1d4963}.sco-team-box>header p{margin:0;color:#688499;font-size:12px;line-height:1.8}
+.sco-team-overview{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0}.sco-team-overview>span{padding:10px 13px;background:#e9f5f9;color:#216f8b;border-radius:11px;font-size:11px}
+.sco-team-onboard{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin:13px 0}
+.sco-team-onboard label,.sco-team-filters label{display:grid;gap:6px;font-size:11px;font-weight:700;color:#456a7b;flex:1;min-width:140px}
+.sco-team-onboard input,.sco-team-filters select,.sco-team-chooser input{background:white;border:1px solid #d7e7ed;border-radius:10px;padding:11px;color:#26475d;width:100%}
+.sco-team-onboard button,.sco-team-assign-bottom>button{display:flex;align-items:center;gap:8px;background:#087e9c;color:white;border:0;border-radius:11px;font-weight:800;padding:11px 16px;font-size:12px}
+.sco-team-onboard button:disabled,.sco-team-assign-bottom>button:disabled{cursor:not-allowed;opacity:.5}
+.sco-staff-credentials{padding:16px;background:#fff5d7;border:1px solid #edcf80;border-radius:13px;color:#69502a;display:grid;gap:9px;margin:13px 0}
+.sco-staff-credentials>div{display:flex;align-items:center;gap:8px}
+.sco-staff-credentials p{margin:0;font-size:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sco-staff-credentials code{display:inline-block;direction:ltr;unicode-bidi:embed;overflow-wrap:anywhere;font-size:12px}
+.sco-staff-credentials button{justify-self:start;display:flex;align-items:center;gap:7px;border:0;background:#a1742e;color:white;border-radius:9px;padding:10px;font-size:11px}
+.sco-staff-credentials button.sco-staff-dismiss{color:#7d6d4b;background:transparent;padding:5px}
+.sco-team-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.sco-team-chooser{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.sco-team-chooser input{flex:1;min-width:170px}
+.sco-team-chooser>span{font-size:11px;color:#668391}
+.sco-team-chooser button{padding:9px 11px;border:1px solid #d7e8ee;border-radius:9px;background:white;font-size:11px;color:#196e87}
+.sco-team-hotels{max-height:360px;overflow:auto;display:grid;gap:5px}
+.sco-team-hotels>label{display:flex;gap:10px;align-items:center;background:white;border:1px solid #e9eff3;border-radius:9px;padding:10px;cursor:pointer}
+.sco-team-hotels input{width:17px;height:17px;accent-color:#087e9c}
+.sco-team-hotels label span{flex:1;min-width:0;display:grid;gap:4px}.sco-team-hotels b{font-size:12px;color:#244e66}
+.sco-team-hotels small{font-size:10px;color:#728c9d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sco-team-hotels em{font-size:10px;font-style:normal;color:#9a783c}
+.sco-team-assign-bottom{margin-top:14px;border-top:1px solid #e0eaed;padding-top:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.sco-team-assign-bottom>span{font-size:11px;color:#516e81;margin-left:auto}
+.sco-team-assign-bottom label{display:flex;gap:6px;align-items:center;font-size:11px;color:#a34734}
+@media(max-width:850px){.sco-team-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.sco-team-filters{grid-template-columns:1fr}.sco-team-assign-bottom>button{width:100%;justify-content:center}}
