@@ -26,21 +26,26 @@ const ACTION_PRESETS=['دریافت ظرفیت آنلاین','اصلاح نرخ 
 const outcomeList=['ظرفیت آنلاین فعال شد','نرخ اصلاح شد','رزرو پیگیری و قطعی شد','قرارداد/همکاری بهبود یافت','پیگیری انجام شد','هتل پاسخ نداد','مانع رفع نشد','سایر'];
 async function getAll(table:string,filter?:(q:any)=>any,cap=12000){
  if(!db)return [];
- // Stable ordering is mandatory when fetching more than one PostgREST page.
- const acc:any[]=[];const size=1000;const parallel=4;
- for(let base=0;base<cap;base+=size*parallel){
+ const size=1000;const parallel=4;
+ const fetchPage=async(offset:number)=>{
+  let q=db.from(table).select('*');
+  if(filter)q=filter(q);
+  const {data,error}=await q.range(offset,Math.min(cap-1,offset+size-1));
+  if(error)throw error;
+  return data||[];
+ };
+ // Small tables require only one request. Large tables are paginated concurrently,
+ // always with an explicit deterministic sort supplied by the caller.
+ const first=await fetchPage(0);
+ const rows:any[]=[...first];
+ if(first.length<size)return rows;
+ for(let base=size;base<cap;base+=size*parallel){
   const offsets=Array.from({length:Math.min(parallel,Math.ceil((cap-base)/size))},(_,i)=>base+i*size);
-  const chunks=await Promise.all(offsets.map(async offset=>{
-   let q=db.from(table).select('*');
-   if(filter)q=filter(q);
-   const {data,error}=await q.range(offset,Math.min(cap-1,offset+size-1));
-   if(error)throw error;
-   return data||[];
-  }));
-  chunks.forEach(chunk=>acc.push(...chunk));
+  const chunks=await Promise.all(offsets.map(fetchPage));
+  for(const chunk of chunks)rows.push(...chunk);
   if(chunks.some(chunk=>chunk.length<size))break;
  }
- return acc.slice(0,cap);
+ return rows.slice(0,cap);
 }
 function dateDelta(day:string|null|undefined){if(!day)return 9999;return Math.floor((new Date(day+'T23:59:59').getTime()-Date.now())/86400000)}
 function IconStat({title,value,hint,icon:Icon,color}:any){return <div className="sco-stat"><span className={'sco-stat-icon '+(color||'')}><Icon size={19}/></span><div><small>{title}</small><strong>{value}</strong><em>{hint}</em></div></div>}
