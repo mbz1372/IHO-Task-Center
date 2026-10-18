@@ -84,6 +84,7 @@ export default function AccountAccess(){
     {emailField}
     {field('رمز عبور',<input required type="password" autoComplete="current-password" dir="ltr" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>)}
     <button type="submit" disabled={!ready||busy||!supabase} style={action}><LogIn size={17} style={{verticalAlign:'middle',marginLeft:8}}/>{busy?'در حال ورود…':'ورود'}</button>
+    <button type="button" disabled={!ready||busy||!supabase} style={{...secondary,fontWeight:800,background:'#fff',color:'#1c4268'}} onClick={async()=>{if(!supabase)return;setBusy(true);setError('');const {error:e}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin+'/account-access',queryParams:{prompt:'select_account'}}});if(e){setError('ورود با گوگل: '+e.message);setBusy(false)}}}>ورود با حساب Google</button>
     <button type="button" style={secondary} onClick={()=>changeMode('reset')}>رمز را فراموش کرده‌ام</button>
    </form>:mode==='reset'?<form onSubmit={reset} style={{display:'grid',gap:14}}>
     {emailField}
