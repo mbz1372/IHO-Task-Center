@@ -378,16 +378,11 @@ export default function SupplyOS(){
  </div></main>;
   if(!member)return <main className="sco-auth"><div className="sco-authbox">
   <span className="sco-mark"><ShieldCheck size={24}/></span>
-  <h2>راه‌اندازی فضای تأمین</h2>
-  <p>ورود ایمیلی انجام شد. برای فعال‌سازی مدیر اولیه، کد یک‌بارمصرف راه‌اندازی را وارد کن. اعضای بعدی از داخل بخش تیم اضافه می‌شوند.</p>
-  <small>{session.user.email}</small>
-  <label>نام نمایشی مدیر</label><input value={setupName} onChange={e=>setSetupName(e.target.value)} placeholder="نام و نام خانوادگی"/>
-  <label>کد یک‌بارمصرف فعال‌سازی</label><input dir="ltr" autoComplete="off" value={activationCode} onChange={e=>setActivationCode(e.target.value)} placeholder="کد فعال‌سازی"/>
-  <button disabled={busy||setupName.trim().length<2||!activationCode.trim()} onClick={async()=>{
-   setBusy(true);setError('');
-   try{const {error:e}=await db.rpc('sco_claim_first_manager',{p_code:activationCode.trim(),p_name:setupName.trim()});if(e)throw e;setMember({user_id:session.user.id,full_name:setupName.trim(),role:'manager',active:true});setActivationCode('');setNotice('حساب مدیر فعال شد. برای شروع فقط فهرست هتل‌ها را وارد کن.')}catch(e:any){setError(e.message)}finally{setBusy(false)}
-  }}>{busy?'در حال فعال‌سازی...':'فعال‌سازی مدیر و شروع کار'}</button>
-  {error&&<p className="sco-error">{error}</p>}
+  <h2>در انتظار تأیید دسترسی</h2>
+  <p>ورود با حساب Google انجام شد؛ اما هنوز عضویت فعال در تیم تأمین برای این حساب ثبت نشده است. **کد راه‌اندازی مدیر لازم نیست.** از مدیر زنجیره تأمین بخواه از قسمت «تیم و مسئولیت‌ها» دسترسی‌ات را تأیید کند.</p>
+  <small dir="ltr">{session.user.email}</small>
+  <button className="sco-ghost" onClick={()=>{setError('');db.from('sco_members').select('*').eq('user_id',session.user.id).maybeSingle().then(({data,error:e})=>{if(e)setError(e.message);else if(data?.active)setMember(data as Member);else setNotice('هنوز دسترسی فعال نشده است.');})}}>بررسی مجدد دسترسی</button>
+  {(error||notice)&&<p className={error?'sco-error':'sco-muted'}>{error||notice}</p>}
   <button className="sco-ghost" onClick={()=>db.auth.signOut()}>خروج از حساب</button>
  </div></main>;
  if(member.must_change_password)return <main className="sco-auth"><div className="sco-authbox">
