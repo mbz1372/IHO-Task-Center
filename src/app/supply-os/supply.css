@@ -190,3 +190,24 @@
 .sco-verify-actions button:last-child{background:#bf654f}
 .sco-verify-actions button:disabled{opacity:.5;cursor:not-allowed}
 @media(max-width:800px){.sco-teamrow{overflow-x:auto;min-width:0}.sco-verify-top{flex-direction:column;align-items:stretch}}
+
+
+/* First-run operational workflow: explicit steps, without extra navigation. */
+.sco-kickoff{background:#fff;border:1px solid #d8e6ec;border-radius:19px;padding:19px;margin-bottom:17px}
+.sco-kickoff-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sco-kickoff-head span{font:800 10px system-ui;letter-spacing:1px;color:#087d9a}
+.sco-kickoff-head h3{font-size:18px;color:#1e4560;margin:8px 0 5px}
+.sco-kickoff-head p{font-size:11px;line-height:1.8;color:#7791a2;margin:0}
+.sco-kickoff-head>b{background:#e8f5fa;color:#0a7493;border-radius:12px;padding:12px;white-space:nowrap}
+.sco-kickoff-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:17px}
+.sco-kickoff-steps>button{display:flex;align-items:center;gap:9px;border:1px solid #e0e9ee;border-radius:12px;padding:12px 10px;background:#fafcfe;color:#32536b;text-align:right;min-width:0}
+.sco-kickoff-steps>button:hover{background:#eef9fc;border-color:#8fc6d8}
+.sco-kickoff-steps>button>span:first-child{display:grid;place-items:center;border-radius:9px;background:#e8eff4;color:#52778d;min-width:33px;height:33px;font-weight:800}
+.sco-kickoff-steps>button>span.done{background:#e2f8ec;color:#238763}
+.sco-kickoff-steps>button>div{min-width:0;flex:1;display:grid;gap:6px}
+.sco-kickoff-steps>button b{font-size:11px;color:#205471}
+.sco-kickoff-steps>button small{font-size:10px;line-height:1.7;color:#7992a0}
+@media(max-width:1100px){.sco-kickoff-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.sco-kickoff-steps{grid-template-columns:1fr}.sco-kickoff-head{align-items:start}}
+.sco-confirm-freshness{display:flex!important;grid-column:1/-1;align-items:center;flex-direction:row!important;gap:9px!important;border:1px solid #cbe6d9;border-radius:10px;padding:10px;color:#2c765d}
+.sco-confirm-freshness input{width:16px!important;height:16px;accent-color:#148a65}
