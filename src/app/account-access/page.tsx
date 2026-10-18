@@ -1,53 +1,105 @@
 'use client';
-import {useEffect,useState} from 'react';
-import {createClient,Session} from '@supabase/supabase-js';
+import {FormEvent,useEffect,useState} from 'react';
+import {createClient, type Session} from '@supabase/supabase-js';
+import {ArrowLeft,CheckCircle2,KeyRound,Mail,ShieldCheck,LogIn} from 'lucide-react';
+
 const url=process.env.NEXT_PUBLIC_SUPABASE_URL||'';
 const key=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'';
-const supabase=url&&key?createClient(url,key,{auth:{persistSession:true,detectSessionInUrl:true}}):null;
-export default function Access(){
+const supabase=url&&key?createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
+type Mode='login'|'reset'|'code';
+const inputStyle:React.CSSProperties={width:'100%',border:'1px solid #d6e0ec',padding:'12px 13px',borderRadius:10,fontFamily:'inherit',fontSize:14,background:'#f9fbff',color:'#162943'};
+export default function AccountAccess(){
  const [session,setSession]=useState<Session|null>(null);
- const [ready,setReady]=useState(false),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState('');
+ const [ready,setReady]=useState(false),[mode,setMode]=useState<Mode>('login');
+ const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[otp,setOtp]=useState('');
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
- const [forgot,setForgot]=useState(false),[requestSent,setRequestSent]=useState(false);
- useEffect(()=>{if(!supabase){setReady(true);return;}const db=supabase;db.auth.getSession().then(({data})=>{setSession(data.session);setReady(true)});
- const {data}=db.auth.onAuthStateChange((_ev,s)=>setSession(s));return ()=>data.subscription.unsubscribe();},[]);
- async function sendReset(e:React.FormEvent){
-  e.preventDefault();if(!supabase||requestSent)return;setBusy(true);setError('');setMessage('');
-  try{
-   const {error:err}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:location.origin+'/account-access'});
-   if(err)throw err;
-   setRequestSent(true);setMessage('درخواست بازیابی ثبت شد. ایمیل خود را بررسی کن. پس از بازکردن لینک، در همین صفحه می‌توانی رمز جدید تعیین کنی.');
-  }catch(e:any){
-   const description=String(e?.message||'');
-   setError(description.toLowerCase().includes('rate limit')?'سقف ارسال ایمیل Supabase تکمیل شده است. حدود یک ساعت پس از آخرین ارسال موفق صبر کن یا SMTP اختصاصی تنظیم شود.':'ارسال لینک بازیابی ناموفق بود: '+description);
-  }finally{setBusy(false)}
+
+ useEffect(()=>{
+  if(!supabase){setReady(true);return}
+  let alive=true;
+  supabase.auth.getSession().then(({data})=>{if(alive){setSession(data.session);setReady(true)}}).catch(()=>{if(alive)setReady(true)});
+  const {data:{subscription}}=supabase.auth.onAuthStateChange((event,updated)=>{
+   if(!alive)return;
+   setSession(updated);
+   if(event==='PASSWORD_RECOVERY'&&updated)setMessage('هویت از طریق لینک بازیابی تأیید شد. رمز جدید خود را وارد کن.');
+  });
+  return()=>{alive=false;subscription.unsubscribe()};
+ },[]);
+
+ function changeMode(next:Mode){setMode(next);setError('');setMessage('');}
+ function errText(value:unknown){const s=String(value||'');
+  if(/rate limit|too many requests|429/i.test(s))return 'سقف درخواست ایمیل یا تأیید کد موقتاً تکمیل شده است. بعداً دوباره امتحان کن یا SMTP سازمانی را بررسی کن.';
+  if(/expired|invalid.*(token|otp)|otp_expired|403/i.test(s))return 'کد نامعتبر یا منقضی شده است. یک کد تازه درخواست کن و آخرین ایمیل را استفاده کن.';
+  return s||'ارتباط با سامانه احراز هویت برقرار نشد.';
  }
- async function submit(e:React.FormEvent){e.preventDefault();if(!supabase)return;setBusy(true);setError('');setMessage('');
- try{
-  if(session){
-   if(password.length<12)throw Error('رمز باید حداقل ۱۲ کاراکتر باشد.');
-   if(password!==confirm)throw Error('دو رمز مطابقت ندارند.');
-   const {error}=await supabase.auth.updateUser({password});if(error)throw error;
-   setPassword('');setConfirm('');setMessage('رمز با موفقیت ثبت شد. از این پس با ایمیل و رمز ورود کن.');
-  }else{
-   const {error}=await supabase.auth.signInWithPassword({email:email.trim(),password});if(error)throw error;
-   setPassword('');setMessage('ورود موفق. به مرکز فرمان بازگرد.');
-  }
- }catch(e:any){setError(e.message||'خطا در احراز هویت');}finally{setBusy(false);}
+ async function login(e:FormEvent){e.preventDefault();if(!supabase)return;setBusy(true);setError('');setMessage('');
+  const {error:authError}=await supabase.auth.signInWithPassword({email:email.trim().toLowerCase(),password});
+  if(authError)setError(errText(authError.message));else{setPassword('');setMessage('ورود موفق بود. می‌توانی وارد داشبورد شوی.')}
+  setBusy(false);
  }
- return <main style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#10314a',padding:16,direction:'rtl'}}>
- <section style={{width:'min(440px,100%)',background:'white',color:'#19364a',padding:30,borderRadius:20,fontFamily:'Vazirmatn,system-ui',display:'grid',gap:15}}>
- <h1 style={{margin:0,fontSize:23}}>ورود امن ایران‌هتل</h1><p style={{fontSize:13,lineHeight:2,margin:0}}>{session?'حساب شناسایی شد؛ رمز تازه را در همین صفحه تعیین کن.':forgot?'برای بازیابی رمز، ایمیل حساب موجود را وارد کن. Supabase برایت لینک بازیابی ارسال می‌کند.':'با حساب موجودت و رمز عبوری که قبلاً تنظیم کرده‌ای وارد شو.'}</p>
- {session&&<p style={{fontSize:12}}>حساب واردشده: {session.user.email}</p>}
- {!ready&&<p>در حال بررسی حساب...</p>}
- {!supabase&&<p>تنظیمات Supabase در دسترس نیست.</p>}
- <form onSubmit={forgot&&!session?sendReset:submit} style={{display:'grid',gap:12}}>
- {!session&&<label style={{display:'grid',gap:5,fontSize:12}}>ایمیل<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="username" dir="ltr" style={{padding:12,border:'1px solid #d7e2ea',borderRadius:9}}/></label>}
- {(!forgot||!!session)&&<label style={{display:'grid',gap:5,fontSize:12}}>{session?'رمز جدید (حداقل ۱۲ کاراکتر)':'رمز ورود'}<input required type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete={session?'new-password':'current-password'} dir="ltr" style={{padding:12,border:'1px solid #d7e2ea',borderRadius:9}}/></label>}
- {session&&<label style={{display:'grid',gap:5,fontSize:12}}>تکرار رمز جدید<input required type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password" dir="ltr" style={{padding:12,border:'1px solid #d7e2ea',borderRadius:9}}/></label>}
- <button type="submit" disabled={busy||!supabase||(forgot&&!session&&requestSent)} style={{padding:13,border:0,borderRadius:10,background:'#0784a1',color:'#fff'}}>{busy?'در حال پردازش':session?'ذخیره رمز دائمی':forgot?'ارسال لینک بازیابی رمز':'ورود با رمز عبور'}</button></form>
- {!session&&<button type="button" onClick={()=>{setForgot(x=>!x);setError('');setMessage('');setRequestSent(false)}} style={{background:'transparent',border:0,color:'#08759b',fontSize:13,cursor:'pointer'}}>{forgot?'بازگشت به ورود با رمز عبور':'رمزم را فراموش کرده‌ام'}</button>}
- {message&&<p style={{color:'#047857'}}>{message}</p>}{error&&<p style={{color:'#b91c1c'}}>{error}</p>}
- <a href="/" style={{fontSize:13,color:'#08759b'}}>بازگشت به مرکز فرمان</a>
- </section></main>;
+ async function reset(e:FormEvent){e.preventDefault();if(!supabase)return;setBusy(true);setError('');setMessage('');
+  const {error:authError}=await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(),{redirectTo:window.location.origin+'/account-access'});
+  if(authError)setError(errText(authError.message));
+  else{setMode('code');setMessage('درخواست ثبت شد. اگر ایمیل به حسابی متصل باشد، پیام بازیابی ارسال می‌شود. کد ۶ رقمی را از ایمیل وارد کن. اگر قالب ایمیل هنوز فقط لینک دارد، مدیر سیستم باید قالب Recovery را برای نمایش کد تنظیم کند.')}
+  setBusy(false);
+ }
+ async function verify(e:FormEvent){e.preventDefault();if(!supabase)return;setBusy(true);setError('');setMessage('');
+  const {data,error:authError}=await supabase.auth.verifyOtp({email:email.trim().toLowerCase(),token:otp.trim(),type:'recovery'});
+  if(authError)setError(errText(authError.message));
+  else if(data.session){setSession(data.session);setOtp('');setMessage('کد بازیابی تأیید شد. اکنون رمز جدید را ثبت کن.')}
+  else setError('تأیید انجام شد اما نشست معتبر ایجاد نشد؛ دوباره تلاش کن.');
+  setBusy(false);
+ }
+ async function savePassword(e:FormEvent){e.preventDefault();if(!supabase||!session)return;setBusy(true);setError('');setMessage('');
+  if(password.length<12){setError('رمز جدید باید حداقل ۱۲ کاراکتر داشته باشد.');setBusy(false);return}
+  if(password!==confirm){setError('تکرار رمز مطابقت ندارد.');setBusy(false);return}
+  const {error:authError}=await supabase.auth.updateUser({password});
+  if(authError)setError(errText(authError.message));
+  else{setPassword('');setConfirm('');setMessage('رمز جدید با موفقیت ذخیره شد. می‌توانی به پنل ایران‌هتل بروی.')}
+  setBusy(false);
+ }
+ const action={background:'#137fb1',border:'none',color:'white',padding:'13px 17px',borderRadius:11,fontWeight:800,fontSize:13,fontFamily:'inherit',cursor:'pointer',width:'100%'} as React.CSSProperties;
+ const secondary={border:'1px solid #d9e6f0',background:'#f0f6fb',color:'#205276',padding:'10px 12px',borderRadius:10,fontFamily:'inherit',cursor:'pointer',fontSize:12} as React.CSSProperties;
+ const field=(title:string,element:React.ReactNode)=><label style={{display:'grid',gap:7,fontSize:12,color:'#41546c',fontWeight:750}}>{title}{element}</label>;
+ const emailField=field('ایمیل سازمانی',<input type="email" value={email} required autoComplete="username" dir="ltr" style={inputStyle} placeholder="name@company.ir" onChange={e=>setEmail(e.target.value)}/>);
+ return <main dir="rtl" style={{minHeight:'100vh',background:'radial-gradient(circle at 20% 12%,#1d5d84 0%,#102741 51%,#0b1a30 100%)',padding:16,display:'grid',placeItems:'center',fontFamily:'Vazirmatn,Tahoma,system-ui,sans-serif'}}>
+  <section style={{width:'min(470px,100%)',background:'#fff',color:'#183450',padding:'clamp(22px,4vw,36px)',borderRadius:20,boxShadow:'0 24px 70px #06162955',display:'grid',gap:17}}>
+   <div style={{display:'flex',gap:11,alignItems:'center'}}>
+    <span style={{background:'#e8f5fa',color:'#117ea6',padding:12,borderRadius:14,display:'grid'}}><ShieldCheck size={24}/></span>
+    <div><strong style={{fontSize:21}}>دسترسی امن ایران‌هتل</strong><div style={{fontSize:11,color:'#778da4'}}>IHO SUPPLY OS • ACCOUNT RECOVERY</div></div>
+   </div>
+   <p style={{fontSize:12,lineHeight:2,color:'#5f748b',margin:0}}>
+    {!ready?'در حال بررسی حساب...':session?'حساب تأیید شده است. برای ورودهای بعدی رمز شخصی جدید تعیین کن.':mode==='login'?'برای ورود از رمز خودت استفاده کن. اگر فراموش کرده‌ای، بازیابی را انتخاب کن.':mode==='reset'?'ایمیل حساب را وارد کن؛ سپس می‌توانی با کد یک‌بارمصرف بازیابی کنی.':'کد بازیابی ارسال‌شده به ایمیل را وارد کن. لینک‌های یک‌بارمصرف ممکن است توسط فیلترهای ایمیل باز شوند؛ ورود کد این مشکل را دور می‌زند.'}
+   </p>
+   {!supabase&&<div style={{background:'#fff0ee',padding:12,borderRadius:10,color:'#a03a2a'}}>اتصال Supabase در محیط انتشار تنظیم نشده است.</div>}
+   {session?<>
+    <div style={{background:'#eef8f4',color:'#13694c',padding:12,borderRadius:10,fontSize:12,display:'flex',gap:8,alignItems:'center'}}><CheckCircle2 size={16}/> حساب تأییدشده: <span dir="ltr">{session.user.email}</span></div>
+    <form onSubmit={savePassword} style={{display:'grid',gap:14}}>
+     {field('رمز جدید (حداقل ۱۲ کاراکتر)',<input required minLength={12} type="password" autoComplete="new-password" dir="ltr" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>)}
+     {field('تکرار رمز جدید',<input required minLength={12} type="password" autoComplete="new-password" dir="ltr" value={confirm} onChange={e=>setConfirm(e.target.value)} style={inputStyle}/>)}
+     <button type="submit" disabled={!ready||busy||!supabase} style={action}><KeyRound size={17} style={{verticalAlign:'middle',marginLeft:8}}/>{busy?'در حال ذخیره…':'ثبت رمز جدید'}</button>
+    </form>
+    <a href="/" style={{color:'#137fa3',fontSize:13,textAlign:'center'}}>ورود به داشبورد <ArrowLeft size={15} style={{verticalAlign:'middle'}}/></a>
+   </>:mode==='login'?<form onSubmit={login} style={{display:'grid',gap:14}}>
+    {emailField}
+    {field('رمز عبور',<input required type="password" autoComplete="current-password" dir="ltr" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>)}
+    <button type="submit" disabled={!ready||busy||!supabase} style={action}><LogIn size={17} style={{verticalAlign:'middle',marginLeft:8}}/>{busy?'در حال ورود…':'ورود'}</button>
+    <button type="button" style={secondary} onClick={()=>changeMode('reset')}>رمز را فراموش کرده‌ام</button>
+   </form>:mode==='reset'?<form onSubmit={reset} style={{display:'grid',gap:14}}>
+    {emailField}
+    <button type="submit" disabled={!ready||busy||!supabase} style={action}><Mail size={17} style={{verticalAlign:'middle',marginLeft:8}}/>{busy?'در حال ارسال…':'درخواست کد بازیابی'}</button>
+    <button type="button" style={secondary} onClick={()=>changeMode('code')}>از قبل کد بازیابی دارم</button>
+    <button type="button" style={secondary} onClick={()=>changeMode('login')}>بازگشت به ورود</button>
+   </form>:<form onSubmit={verify} style={{display:'grid',gap:14}}>
+    {emailField}
+    {field('کد یک‌بارمصرف ۶ رقمی',<input required inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} autoComplete="one-time-code" dir="ltr" placeholder="000000" value={otp} onChange={e=>setOtp(e.target.value.replace(/[^0-9]/g,'').slice(0,6))} style={inputStyle}/>)}
+    <button type="submit" disabled={!ready||busy||!supabase||otp.length!==6} style={action}>{busy?'در حال تأیید…':'تأیید کد و تعیین رمز جدید'}</button>
+    <button type="button" style={secondary} onClick={()=>changeMode('reset')}>دریافت کد جدید</button>
+    <button type="button" style={secondary} onClick={()=>changeMode('login')}>بازگشت به ورود</button>
+   </form>}
+   {message&&<p role="status" style={{border:'1px solid #c2ead9',background:'#eefaf3',color:'#116947',padding:12,borderRadius:10,fontSize:12,lineHeight:1.9,margin:0}}>{message}</p>}
+   {error&&<p role="alert" style={{border:'1px solid #f6ceca',background:'#fff2f1',color:'#b33737',padding:12,borderRadius:10,fontSize:12,lineHeight:1.9,margin:0}}>{error}</p>}
+   {!session&&<a href="/" style={{textAlign:'center',fontSize:12,color:'#16769a'}}>بازگشت به صفحه اصلی</a>}
+  </section>
+ </main>;
 }
