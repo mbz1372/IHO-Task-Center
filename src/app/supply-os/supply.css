@@ -211,3 +211,28 @@
 @media(max-width:600px){.sco-kickoff-steps{grid-template-columns:1fr}.sco-kickoff-head{align-items:start}}
 .sco-confirm-freshness{display:flex!important;grid-column:1/-1;align-items:center;flex-direction:row!important;gap:9px!important;border:1px solid #cbe6d9;border-radius:10px;padding:10px;color:#2c765d}
 .sco-confirm-freshness input{width:16px!important;height:16px;accent-color:#148a65}
+
+
+/* Operations QA — counts become a traceable remediation list */
+.sco-audit{margin-bottom:18px}
+.sco-audit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:18px 0}
+.sco-audit-grid>button{display:flex;align-items:center;gap:10px;text-align:right;border:1px solid #e2ebef;border-radius:12px;background:#f9fcfd;padding:12px;color:#3a637b;min-width:0;flex-wrap:wrap}
+.sco-audit-grid>button.active{border-color:#0e8cad;background:#e9f7fb}
+.sco-audit-grid>button>span{color:#ca812e}
+.sco-audit-grid>button strong{font-size:20px}
+.sco-audit-grid>button small{width:100%;font-size:11px;color:#5d788b;line-height:1.6}
+.sco-audit-detail{display:flex;justify-content:space-between;gap:16px;align-items:center;background:#f3f8fa;border-radius:12px;padding:14px}
+.sco-audit-detail b{font-size:14px;color:#21516c}
+.sco-audit-detail p{margin:7px 0;font-size:11px;color:#627b8a}
+.sco-audit-detail small{font-size:11px;color:#0e7e9c}
+.sco-audit-detail label{font-size:11px;color:#5d778b;display:flex;gap:7px;align-items:center;white-space:nowrap}
+.sco-audit-search{margin:14px 0;max-width:440px;min-height:42px}
+.sco-audit-list{display:grid;gap:6px}
+.sco-audit-list>button{display:flex;gap:12px;justify-content:space-between;align-items:center;text-align:right;width:100%;background:#fff;border:1px solid #e9eff2;padding:12px;border-radius:10px;color:#31546c}
+.sco-audit-list>button:hover{background:#f2fafd;border-color:#99d5e4}
+.sco-audit-list>button span{display:grid;gap:5px;min-width:0}
+.sco-audit-list>button b{font-size:12px}
+.sco-audit-list>button small{color:#798f9b;font-size:10px}
+.sco-audit-list>button em{font-size:10px;font-style:normal;color:#0e7c97;white-space:nowrap}
+@media(max-width:850px){.sco-audit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sco-audit-detail{flex-wrap:wrap}}
+@media(max-width:480px){.sco-audit-list>button em{display:none}}
