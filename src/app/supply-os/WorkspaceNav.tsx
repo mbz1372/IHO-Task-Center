@@ -1,8 +1,8 @@
 'use client';
 import {useState} from 'react';
-import {Activity, BarChart3, Building2, CalendarClock, ChevronDown, ClipboardCheck, Database, FileBarChart2, Hotel, LogOut, Megaphone, Menu, ShieldCheck, Users, X} from 'lucide-react';
+import {Activity, BarChart3, Building2, CalendarClock, ChevronDown, ClipboardCheck, Radar, Database, FileBarChart2, Hotel, LogOut, Megaphone, Menu, ShieldCheck, Users, X} from 'lucide-react';
 
-export type WorkspaceView='today'|'hotels'|'tasks'|'team'|'data'|'report'|'market'|'commercial';
+export type WorkspaceView='today'|'hotels'|'tasks'|'team'|'data'|'report'|'market'|'commercial'|'control';
 type Props={view:WorkspaceView;onView:(v:WorkspaceView)=>void;manager:boolean;userName:string;openCount:number;lateCount:number;onLogout:()=>void};
 const primary=[
  {id:'today',label:'میز کار امروز',Icon:Activity,help:'از اینجا شروع کن'},
@@ -10,6 +10,7 @@ const primary=[
  {id:'hotels',label:'هتل‌ها و فرصت‌ها',Icon:Hotel,help:'جستجو و پرونده ۳۶۰'}
 ] as const;
 const managers=[
+ {id:'control',label:'رادار و اعتبار هتل‌ها',Icon:Radar},
  {id:'team',label:'تیم و مسئولیت‌ها',Icon:Users},
  {id:'data',label:'فایل‌ها و سلامت داده',Icon:Database},
  {id:'report',label:'گزارش مدیرعامل',Icon:FileBarChart2},
