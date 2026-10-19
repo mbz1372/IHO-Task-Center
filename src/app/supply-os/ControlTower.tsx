@@ -1,5 +1,6 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
+import IncidentInbox from './IncidentInbox';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {AlertCircle,ArrowLeft,Check,ChevronLeft,ClipboardCheck,Clock3,Database,Download,Hotel,RefreshCw,Search,ShieldCheck,Target,Users,X} from 'lucide-react';
 type HotelRow={
@@ -29,6 +30,7 @@ function exportCsv(rows:HotelRow[]){
 export default function ControlTower({db,manager,userId,onOpenHotel}:{db:SupabaseClient;manager:boolean;userId:string;onOpenHotel?:(key:string)=>void}){
  const [summary,setSummary]=useState<Summary|null>(null),[staff,setStaff]=useState<Staff[]>([]);
  const [rows,setRows]=useState<HotelRow[]>([]),[total,setTotal]=useState(0),[alerts,setAlerts]=useState(0),[lastScan,setLastScan]=useState<string|null>(null);
+ const [section,setSection]=useState<'hotels'|'incidents'>('hotels');
  const [mode,setMode]=useState<'priority'|'all'|'owners'|'verification'|'outages'>('priority');
  const [q,setQ]=useState(''),[page,setPage]=useState(0),[loading,setLoading]=useState(false);
  const [selected,setSelected]=useState<HotelRow|null>(null),[care,setCare]=useState('unknown'),[note,setNote]=useState(''),[nextCheck,setNextCheck]=useState('');
@@ -108,7 +110,9 @@ export default function ControlTower({db,manager,userId,onOpenHotel}:{db:Supabas
  {chip('هتل دارای امتیاز معتبر',summary.commercially_scored,<ShieldCheck size={17}/>)}
  </div>}
  <div className="sco-control-truth"><Database size={19}/><p><b>مبنای تصمیم: شواهد، نه حدس.</b> عدم ثبت نرخ یا ظرفیت، به‌معنای قطع بودن آن نیست. امتیاز تجاری فقط با دست‌کم ۱۴ مشاهده کامل و تاریخ‌دار فعال می‌شود؛ اعتبار نهایی همکاری تا اتصال SLA و شکایت‌های واقعی محاسبه نمی‌شود. {fa(alerts)} هشدار باز ثبت‌شده در سامانه وجود دارد. آخرین پایش ثبت‌شده: {lastScan?new Date(lastScan).toLocaleString('fa-IR'):'هنوز ثبت نشده'}.</p></div>
- <div className="sco-control-grid">
+ <nav className="sco-control-switch" aria-label="بخش‌های اتاق کنترل"><button type="button" className={section==='hotels'?'active':''} onClick={()=>setSection('hotels')}>پوشش و رتبه هتل‌ها</button><button type="button" className={section==='incidents'?'active':''} onClick={()=>setSection('incidents')}>صندوق هشدار و SLA {alerts>0?'('+fa(alerts)+')':''}</button></nav>
+ {section==='incidents'&&<IncidentInbox db={db} staff={staff} onChanged={()=>{void loadRows();void loadOverview()}}/>}
+ {section==='hotels'&&<div className="sco-control-grid">
  <section className="sco-control-table-wrap">
   <div className="sco-control-filters">
    <div className="sco-control-tabs">
@@ -130,7 +134,7 @@ export default function ControlTower({db,manager,userId,onOpenHotel}:{db:Supabas
  {staff.map(p=><div className="sco-control-person" key={p.user_id}><div><b>{p.full_name}</b><small>{p.role==='manager'?'مدیر':'کارشناس'}</small></div><span>{fa(p.owned_hotels)} هتل</span><small>{fa(p.open_tasks)} کار باز · {fa(p.overdue_tasks)} معوق</small></div>)}
  {!staff.length&&<p>هنوز کارشناس فعالی ثبت نشده است.</p>}
  </aside>
- </div>
+ </div>}
  {selected&&<div className="sco-control-overlay" onMouseDown={()=>setSelected(null)}><section className="sco-control-drawer" role="dialog" aria-modal="true" aria-label="مدیریت پرونده هتل" onMouseDown={e=>e.stopPropagation()}>
  <header><button type="button" aria-label="بستن" onClick={()=>setSelected(null)}><X size={20}/></button><small>HOTEL 360 / CONTROL</small><h3>{selected.name}</h3><p>{selected.city} · {selected.provider||'تأمین‌کننده نامشخص'} · {selected.category||'بدون دسته'}</p></header>
  <div className="sco-control-drawer-body">
