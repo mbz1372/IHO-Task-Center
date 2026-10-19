@@ -4,7 +4,7 @@ import type {SupabaseClient} from '@supabase/supabase-js';
 import {AlertTriangle,Clock3,ClipboardCheck,RefreshCw,ShieldAlert} from 'lucide-react';
 type Staff={user_id:string;full_name:string;role:string;active:boolean};
 type Incident={id:string;hotel_key:string;rule_code:string;severity:string;description:string;sla_due_at:string|null;escalation_level:number;action_task_id:string|null;created_at:string;sco_hotels:{name:string;city:string;category:string}|null};
-type Health={watchdog_health:string;last_scheduler_scan:string|null;open_alerts:number;unassigned_alerts:number;sla_breaches:number;escalated_alerts:number};
+type Health={watchdog_health:string;last_scheduler_scan:string|null;last_hourly_watchdog:string|null;open_alerts:number;unassigned_alerts:number;sla_breaches:number;escalated_alerts:number};
 const fmt=(v:string|null)=>v?new Date(v).toLocaleString('fa-IR'):'نامشخص';
 const today=()=>new Date().toLocaleDateString('en-CA');
 export default function IncidentInbox({db,staff,onChanged}:{db:SupabaseClient;staff:Staff[];onChanged:()=>void}){
@@ -37,7 +37,7 @@ export default function IncidentInbox({db,staff,onChanged}:{db:SupabaseClient;st
  <div><h3><ShieldAlert size={20}/> صندوق هشدار و SLA</h3><p>هر مورد تا انتساب به تسک واقعی و بررسی رفع مسئله قابل ردیابی است.</p></div>
  <button onClick={()=>void load()} type="button"><RefreshCw size={17}/> به‌روزرسانی</button></div>
  {health&&<><div className={health.watchdog_health==='operational'?'sco-incident-health':'sco-incident-health warning'}>
- <Clock3 size={17}/><span>{health.watchdog_health==='operational'?'پایش روزانه ثبت شده':'پایش زمان‌بندی‌شده نیازمند بررسی است'} · آخرین گزارش: {fmt(health.last_scheduler_scan)}</span></div>
+ <Clock3 size={17}/><span>{health.watchdog_health==='operational'?'پایش روزانه ثبت شده':'پایش زمان‌بندی‌شده نیازمند بررسی است'} · پایش روزانه: {fmt(health.last_scheduler_scan)} · کنترل ساعتی: {fmt(health.last_hourly_watchdog)}</span></div>
  <div className="sco-incident-numbers">{[['باز',health.open_alerts],['بدون مسئول اقدام',health.unassigned_alerts],['عبور از SLA',health.sla_breaches],['ارجاع‌شده',health.escalated_alerts]].map(([label,n])=><div key={label}><small>{label}</small><b>{Number(n).toLocaleString('fa-IR')}</b></div>)}</div></>}
  <div className="sco-incident-filters">{[['unassigned','فاقد اقدام'],['overdue','گذشته از SLA'],['escalated','ارجاع‌شده'],['all','همه']].map(([id,label])=><button className={filter===id?'active':''} key={id} type="button" onClick={()=>{setFilter(id);setPage(0)}}>{label}</button>)}</div>
  <div className="sco-incident-list">{rows.map(a=><button className="sco-incident-row" type="button" key={a.id} onClick={()=>open(a)}>
