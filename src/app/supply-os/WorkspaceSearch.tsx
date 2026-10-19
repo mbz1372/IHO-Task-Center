@@ -1,12 +1,13 @@
 'use client';
 import {useEffect,useMemo,useState} from 'react';
-import {ArrowLeft,Building2,CheckSquare,Command,Database,FileBarChart2,Home,Search,Users,X} from 'lucide-react';
+import {ArrowLeft,Building2,CheckSquare,Command,Database,FileBarChart2,Home,Search,Users,X,Radar} from 'lucide-react';
 import type {WorkspaceView} from './WorkspaceNav';
 type Result={id:WorkspaceView;title:string;hint:string;Icon:any};
 const results:Result[]=[
 {id:'today',title:'میز کار امروز',hint:'فرصت‌های فوری، پرونده‌ها و برنامه امروز',Icon:Home},
 {id:'tasks',title:'تسک‌ها و پیگیری‌ها',hint:'کارهای باز، معوق، منتظر هتل و تکمیل‌شده',Icon:CheckSquare},
 {id:'hotels',title:'بانک و پرونده هتل‌ها',hint:'جستجوی هتل و اقدام از پرونده ۳۶۰',Icon:Building2},
+{id:'control',title:'رادار، اعتبار و پوشش شبکه',hint:'هتل‌های بی‌مسئول، کنترل اعتبار، اقدام اولویت‌دار',Icon:Radar},
 {id:'team',title:'تیم و واگذاری',hint:'دسترسی، مسئولیت کارشناسان و تخصیص هتل',Icon:Users},
 {id:'data',title:'مرکز داده',hint:'فایل‌های رزرو، نرخ، ظرفیت و اعتبارسنجی',Icon:Database},
 {id:'report',title:'گزارش مدیرعامل',hint:'شاخص‌های واقعی و جمع‌بندی قابل ارائه',Icon:FileBarChart2},
