@@ -28,20 +28,21 @@ function exportCsv(rows:HotelRow[]){
 }
 export default function ControlTower({db,manager,userId,onOpenHotel}:{db:SupabaseClient;manager:boolean;userId:string;onOpenHotel?:(key:string)=>void}){
  const [summary,setSummary]=useState<Summary|null>(null),[staff,setStaff]=useState<Staff[]>([]);
- const [rows,setRows]=useState<HotelRow[]>([]),[total,setTotal]=useState(0),[alerts,setAlerts]=useState(0);
+ const [rows,setRows]=useState<HotelRow[]>([]),[total,setTotal]=useState(0),[alerts,setAlerts]=useState(0),[lastScan,setLastScan]=useState<string|null>(null);
  const [mode,setMode]=useState<'priority'|'all'|'owners'|'verification'|'outages'>('priority');
  const [q,setQ]=useState(''),[page,setPage]=useState(0),[loading,setLoading]=useState(false);
  const [selected,setSelected]=useState<HotelRow|null>(null),[care,setCare]=useState('unknown'),[note,setNote]=useState(''),[nextCheck,setNextCheck]=useState('');
  const [assignee,setAssignee]=useState(''),[taskTitle,setTaskTitle]=useState(''),[due,setDue]=useState(isoDay());
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
  const loadOverview=useCallback(async()=>{
-   const [s,t,a]=await Promise.all([
+   const [s,t,a,scans]=await Promise.all([
     db.from('sco_control_summary_v1').select('*').single(),
     db.from('sco_control_staff_v1').select('*').order('full_name'),
-    db.from('sco_control_alerts').select('id',{count:'exact',head:true}).eq('status','open')
+    db.from('sco_control_alerts').select('id',{count:'exact',head:true}).eq('status','open'),
+    db.from('sco_control_scan_runs').select('scanned_at').order('scanned_at',{ascending:false}).limit(1)
    ]);
    if(s.error)throw s.error;if(t.error)throw t.error;if(a.error)throw a.error;
-   setSummary(s.data as Summary);setStaff((t.data||[]) as Staff[]);setAlerts(a.count||0);
+   setSummary(s.data as Summary);setStaff((t.data||[]) as Staff[]);setAlerts(a.count||0);setLastScan(scans.data?.[0]?.scanned_at||null);
  },[db]);
  const loadRows=useCallback(async()=>{
   setLoading(true);setError('');
@@ -106,7 +107,7 @@ export default function ControlTower({db,manager,userId,onOpenHotel}:{db:Supabas
  {chip('اختلال قطعی تأییدشده',summary.verified_supply_outages,<AlertCircle size={17}/>)}
  {chip('هتل دارای امتیاز معتبر',summary.commercially_scored,<ShieldCheck size={17}/>)}
  </div>}
- <div className="sco-control-truth"><Database size={19}/><p><b>مبنای تصمیم: شواهد، نه حدس.</b> عدم ثبت نرخ یا ظرفیت، به‌معنای قطع بودن آن نیست. امتیاز تجاری فقط با دست‌کم ۱۴ مشاهده کامل و تاریخ‌دار فعال می‌شود؛ اعتبار نهایی همکاری تا اتصال SLA و شکایت‌های واقعی محاسبه نمی‌شود. {fa(alerts)} هشدار باز ثبت‌شده در سامانه وجود دارد.</p></div>
+ <div className="sco-control-truth"><Database size={19}/><p><b>مبنای تصمیم: شواهد، نه حدس.</b> عدم ثبت نرخ یا ظرفیت، به‌معنای قطع بودن آن نیست. امتیاز تجاری فقط با دست‌کم ۱۴ مشاهده کامل و تاریخ‌دار فعال می‌شود؛ اعتبار نهایی همکاری تا اتصال SLA و شکایت‌های واقعی محاسبه نمی‌شود. {fa(alerts)} هشدار باز ثبت‌شده در سامانه وجود دارد. آخرین پایش ثبت‌شده: {lastScan?new Date(lastScan).toLocaleString('fa-IR'):'هنوز ثبت نشده'}.</p></div>
  <div className="sco-control-grid">
  <section className="sco-control-table-wrap">
   <div className="sco-control-filters">
