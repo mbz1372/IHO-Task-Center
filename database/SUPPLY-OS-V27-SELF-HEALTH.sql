@@ -87,5 +87,4 @@ drop trigger if exists sco_hotel_care_audit_trigger on public.sco_hotel_care;
 create trigger sco_hotel_care_audit_trigger after insert or update on public.sco_hotel_care
 for each row execute function public.sco_hotel_care_audit_v27();
 
--- Bootstrap a real heartbeat by performing a no-op-or-escalate inspection, not writing test incidents.
-select public.sco_control_watchdog_v27();
+-- The first heartbeat is written by the hourly cron job after deployment.
