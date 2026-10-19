@@ -44,13 +44,13 @@ with hb as(
  count(*) filter(where status='open' and severity='urgent')::int critical_open
  from public.sco_control_alerts
 )
-select last_scheduler_scan,last_any_scan,last_hourly_watchdog,
+select last_scheduler_scan,last_any_scan,
  case when last_scheduler_scan is null then 'no_scheduler_heartbeat'
  when last_scheduler_scan<now()-interval '36 hours' then 'scheduler_stale'
  when last_hourly_watchdog is null then 'no_hourly_heartbeat'
  when last_hourly_watchdog<now()-interval '130 minutes' then 'hourly_watchdog_stale'
  else 'operational' end watchdog_health,
- open_alerts,unassigned_alerts,sla_breaches,escalated_alerts,critical_open
+ open_alerts,unassigned_alerts,sla_breaches,escalated_alerts,critical_open,last_hourly_watchdog
 from hb cross join wd cross join incidents;
 revoke all on public.sco_control_health_v27 from anon;
 grant select on public.sco_control_health_v27 to authenticated;
